@@ -11,3 +11,4 @@ dist/
 # in config/ is meant to be committed
 config/config.yaml
 *.db
+osm_geocode_cache.json

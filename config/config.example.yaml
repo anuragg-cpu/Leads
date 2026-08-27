@@ -31,6 +31,10 @@ product:
     - "home automation hobby"
     - "personal safety app"
 
+  # Used by osm_places below as search-around points. Keep these at
+  # town/locality level, not state level - "Maharashtra" geocodes to a
+  # single point near the state's center and a 3km radius around it
+  # won't usefully cover Pune. Fine to leave for google_news, though.
   target_locations:
     - "Maharashtra"
     - "Pune"
@@ -62,6 +66,16 @@ sources:
       - "civilengineering"
     client_id_env_var: "REDDIT_CLIENT_ID"
     client_secret_env_var: "REDDIT_CLIENT_SECRET"
+  osm_places:
+    enabled: true    # finds hospitals/co-working/campuses/apartment complexes
+                      # by name near each target_location above - see docs/SOURCES.md
+    categories:
+      - "hospital"
+      - "coworking"
+      - "campus"
+      - "residential"
+    radius_meters: 3000
+    max_localities: 20
 
 scoring:
   points_per_keyword: 20
@@ -71,6 +85,12 @@ scoring:
     google_news: 1.0
     github: 0.9
     reddit: 0.7
+    osm_places: 1.0
+  # osm_places finds candidates by category/location, not free-text match,
+  # so it has no keywords to score against - this is the floor score they
+  # get instead of 0, so they don't get buried under everything else.
+  source_base_score:
+    osm_places: 30
 
 follow_up:
   default_days: 3

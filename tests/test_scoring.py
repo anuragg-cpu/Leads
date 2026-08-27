@@ -87,3 +87,32 @@ def test_is_excluded_true_when_exclude_keyword_present():
 def test_is_excluded_false_otherwise():
     candidate = make_candidate(raw_text="looking for a crm")
     assert is_excluded(candidate, BASE_CONFIG) is False
+
+
+def test_source_base_score_used_when_no_keyword_match():
+    config = {
+        "product": {"keywords": ["looking for a crm"]},
+        "scoring": {"points_per_keyword": 20, "source_base_score": {"osm_places": 30}},
+    }
+    candidate = make_candidate(source="osm_places", raw_text="Hospital near Baner")
+    score, matched = score_candidate(candidate, config)
+    assert score == 30
+    assert matched == ""
+
+
+def test_source_base_score_does_not_reduce_a_real_keyword_match():
+    config = {
+        "product": {"keywords": ["looking for a crm"]},
+        "scoring": {"points_per_keyword": 20, "source_base_score": {"osm_places": 30}},
+    }
+    candidate = make_candidate(source="osm_places", raw_text="we are looking for a crm")
+    score, matched = score_candidate(candidate, config)
+    assert score == 30  # 20 from the keyword match is lower than the 30 floor
+    assert matched == "looking for a crm"
+
+
+def test_source_base_score_defaults_to_zero_for_unlisted_source():
+    config = {"product": {"keywords": []}, "scoring": {}}
+    candidate = make_candidate(source="osm_places", raw_text="Hospital near Baner")
+    score, _ = score_candidate(candidate, config)
+    assert score == 0

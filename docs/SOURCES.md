@@ -54,6 +54,59 @@ On Windows, set env vars permanently via:
 `setx REDDIT_CLIENT_ID "your-id-here"` (then open a new terminal), or
 System Properties -> Environment Variables.
 
+## Places near you (`osm_places`)
+
+Different from every other source: it doesn't search text for signal, it
+builds a **canvassing list** - named hospitals, co-working spaces,
+campuses, and apartment complexes near each town/locality you list in
+`product.target_locations`, using free public map data. Good fit for a
+product sold to a specific kind of physical place in a specific area
+(e.g. a hardware install business), where the buyer isn't out there
+publicly posting about the problem.
+
+Two free APIs, no key needed:
+- **Nominatim** turns each locality name into coordinates, capped at
+  1 request/second and cached to disk after the first run.
+- **Overpass API** queries OpenStreetMap for named places matching your
+  `categories` within `radius_meters` of that point.
+
+Because there's no free text to keyword-match, these get a flat floor
+score instead (`scoring.source_base_score.osm_places`) - treat them as
+a cold-outreach target list, not a "someone's actively looking" signal.
+
+Keep `target_locations` at town/locality granularity - a state-level
+entry like "Maharashtra" geocodes to one point near the state's center,
+and a few-km radius around it won't cover much.
+
+**Note on reliability**: public Overpass mirrors are known to rate-limit
+or block cloud/datacenter IP ranges (this is a common complaint from
+people running scrapers/bots against it) - if `osm_places` comes back
+empty or errors on your first run, try again in a few minutes, or check
+https://overpass-api.de/api/status for the primary instance's health.
+
+## Government tender portals (not automated - here's why)
+
+Given Abhay is sold via procurement/tenders to hospitals, campuses, and
+housing societies, GeM (gem.gov.in), the Central Public Procurement
+Portal (eprocure.gov.in), and Maharashtra's own eProcurement portal
+(mahatenders.gov.in) all looked worth adding. They're not, though:
+
+- CPPP and mahatenders (same government NIC platform) both require
+  **solving a CAPTCHA** just to list active tenders - confirmed by
+  fetching their search pages directly. Automating past that would mean
+  defeating an anti-bot measure, which isn't something this tool does.
+- GeM's bid-search endpoints reset the connection outright when hit
+  programmatically (bot-blocked).
+
+**What to do instead - genuinely free, and actually within these
+portals' own intended use**: register as a vendor on GeM and on
+mahatenders.gov.in (both free), then use each portal's own **tender
+alert subscription** feature to get emailed when a new tender matching
+your category (e.g. "security systems", "electronic surveillance",
+"alarm systems") and location is posted. That's the portals' own free
+notification mechanism - it does exactly what a scraper would have done,
+without the CAPTCHA problem.
+
 ## Adding another source later
 
 Once you've told me about Abhay, good candidates to add (all have free

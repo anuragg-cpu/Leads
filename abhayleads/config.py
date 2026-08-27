@@ -25,6 +25,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "client_id_env_var": "REDDIT_CLIENT_ID",
             "client_secret_env_var": "REDDIT_CLIENT_SECRET",
         },
+        "osm_places": {
+            "enabled": False,
+            "categories": ["hospital", "coworking", "campus", "residential"],
+            "radius_meters": 3000,
+            "max_localities": 20,
+        },
     },
     "scoring": {
         "points_per_keyword": 20,
@@ -34,6 +40,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "google_news": 0.8,
             "github": 0.9,
             "reddit": 1.0,
+            "osm_places": 1.0,
+        },
+        "source_base_score": {
+            "osm_places": 30,
         },
     },
     "follow_up": {"default_days": 3},
