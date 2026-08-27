@@ -53,3 +53,34 @@ def test_element_to_candidate_skips_unnamed_places():
 def test_fetch_returns_empty_without_target_locations():
     source = OSMPlacesSource({"target_locations": []})
     assert source.fetch(keywords=[]) == []
+
+
+def test_fetch_keeps_results_from_other_localities_when_one_fails(tmp_path, monkeypatch):
+    # Regression test: a single locality's Overpass failure used to raise
+    # out of fetch() entirely, silently discarding every candidate already
+    # found for earlier localities and never even trying the later ones.
+    monkeypatch.setattr(
+        "abhayleads.sources.osm_places.default_paths",
+        lambda: (tmp_path / "config", tmp_path),
+    )
+    monkeypatch.setattr("abhayleads.sources.osm_places.time.sleep", lambda *_: None)
+
+    source = OSMPlacesSource({"target_locations": ["Baner", "Pune"], "categories": ["hospital"]})
+    monkeypatch.setattr(source, "_geocode", lambda locality: {"lat": 1.0, "lon": 2.0})
+
+    calls = {"n": 0}
+
+    def fake_query_overpass(point, radius, categories):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("All Overpass endpoints failed: boom")
+        return [({"type": "node", "id": 1, "tags": {"name": "Test Hospital"}}, "Hospital")]
+
+    monkeypatch.setattr(source, "_query_overpass", fake_query_overpass)
+
+    candidates = source.fetch(keywords=[])
+
+    assert len(candidates) == 1
+    assert candidates[0].company == "Test Hospital"
+    assert len(source.warnings) == 1
+    assert "Baner" in source.warnings[0]

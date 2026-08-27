@@ -26,6 +26,12 @@ class BaseLeadSource(ABC):
         #: item it's on instead of going silent for minutes at a time.
         #: Sources that finish in one or two quick requests can ignore this.
         self.progress_callback: Callable[[str], None] = _noop
+        #: A source that makes several independent requests (one per
+        #: locality, one per subreddit, ...) should catch a failure on any
+        #: single one, append a note here, and carry on rather than losing
+        #: everything collected so far - safe_fetch() surfaces these
+        #: alongside whatever candidates *did* come back.
+        self.warnings: list[str] = []
 
     @abstractmethod
     def fetch(self, keywords: list[str]) -> list[LeadCandidate]:
@@ -39,7 +45,9 @@ class BaseLeadSource(ABC):
 
     def safe_fetch(self, keywords: list[str]) -> tuple[list[LeadCandidate], list[str]]:
         """Wraps fetch() so one source's network hiccup doesn't kill a run."""
+        self.warnings = []
         try:
-            return self.fetch(keywords), []
+            candidates = self.fetch(keywords)
+            return candidates, list(self.warnings)
         except Exception as exc:  # noqa: BLE001 - deliberately broad, this is a boundary
-            return [], [f"{self.name}: {exc}"]
+            return [], self.warnings + [f"{self.name}: {exc}"]

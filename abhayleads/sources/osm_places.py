@@ -119,7 +119,15 @@ class OSMPlacesSource(BaseLeadSource):
                 _save_geocode_cache(cache_path, cache)
 
             self.progress_callback(f"osm_places: {locality} ({i}/{total}) - querying Overpass...")
-            for element, label in self._query_overpass(point, radius, categories):
+            try:
+                elements = self._query_overpass(point, radius, categories)
+            except Exception as exc:  # noqa: BLE001 - one locality's failure shouldn't lose the rest
+                self.warnings.append(f"{locality}: Overpass query failed - {exc}")
+                self.progress_callback(f"osm_places: {locality} ({i}/{total}) - failed, skipping")
+                time.sleep(1)
+                continue
+
+            for element, label in elements:
                 candidate = self._element_to_candidate(element, locality, label)
                 if candidate is None or candidate.source_detail in seen_urls:
                     continue
