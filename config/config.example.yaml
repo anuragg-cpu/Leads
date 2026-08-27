@@ -1,0 +1,73 @@
+# Abhay Leads - configuration
+#
+# Copy this file to config.yaml (in the same folder) and edit it.
+# config.yaml is gitignored so your keywords/keys never get committed.
+#
+# Nothing here requires a paid account. A couple of sources work better
+# with a *free* API key/token - see docs/SOURCES.md for how to get one.
+# Anything left blank just falls back to the no-key version of that source.
+
+product:
+  name: "Abhay"
+  # One or two sentences describing what Abhay does and who buys it.
+  # Fill this in once you have it - it doesn't drive matching directly,
+  # it's just here so the config is self-documenting.
+  description: ""
+
+  # The words/phrases a lead source's title+text is scored against.
+  # Start broad, then narrow once you see what kind of results come back.
+  # Examples for a B2B SaaS tool might be: "looking for a tool to",
+  # "any recommendations for", "alternative to <competitor>", etc.
+  keywords:
+    - "example keyword one"
+    - "example keyword two"
+
+  # Mentioning any of these anywhere in the text drops the candidate entirely.
+  exclude_keywords: []
+
+  # Optional - only used by sources that support location filtering.
+  target_locations: []
+
+# Each source can be switched on/off independently. Source-specific
+# settings (like which subreddits to search) live under that source's key.
+sources:
+  hackernews:
+    enabled: true
+
+  google_news:
+    enabled: true
+
+  github:
+    enabled: false
+    # Optional free personal access token (no scopes needed for public
+    # search) - raises the rate limit from 10/min to 30/min.
+    # Get one at https://github.com/settings/tokens
+    token_env_var: "GITHUB_TOKEN"
+
+  reddit:
+    enabled: true
+    subreddits:
+      - "startups"
+      - "smallbusiness"
+      - "Entrepreneur"
+    # Optional - a free Reddit "script" app gives you reliable, ToS-compliant
+    # access instead of the unauthenticated fallback. See docs/SOURCES.md.
+    client_id_env_var: "REDDIT_CLIENT_ID"
+    client_secret_env_var: "REDDIT_CLIENT_SECRET"
+
+scoring:
+  # Points added per distinct keyword matched in the title/body.
+  points_per_keyword: 20
+  # Extra points if a keyword appears in the title specifically.
+  title_match_bonus: 15
+  # Per-source multiplier applied to the raw score before clamping to 0-100.
+  source_weights:
+    hackernews: 1.0
+    google_news: 0.8
+    github: 0.9
+    reddit: 1.0
+
+follow_up:
+  # Days from "New" until a lead is flagged as due for follow-up
+  # if you haven't changed its stage or notes yet.
+  default_days: 3

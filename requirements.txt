@@ -1,0 +1,5 @@
+requests>=2.31,<3
+feedparser>=6.0,<7
+PyYAML>=6.0,<7
+PyQt6>=6.6,<7
+pyinstaller>=6.3,<7
