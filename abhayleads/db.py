@@ -6,6 +6,7 @@ dependency to bundle and nothing that needs a native build step.
 
 import hashlib
 import json
+import re
 import sqlite3
 from pathlib import Path
 from typing import Optional
@@ -260,3 +261,56 @@ class Database:
     def delete_lead(self, lead_id: int):
         self.conn.execute("DELETE FROM leads WHERE id = ?", (lead_id,))
         self.conn.commit()
+
+    def merge_exact_duplicate_osm_leads(self) -> list[dict]:
+        """Collapses osm_places leads that share an identical company name
+        within the same locality - typically the same building mapped
+        twice in OpenStreetMap - into a single lead.
+
+        Deliberately exact-match only: "Prakrtii CHS G Block" and
+        "...F Block" are different strings and stay as separate leads,
+        since they're genuinely different named entities that may need
+        separate outreach. Only a literal repeated name is a duplicate.
+
+        If you've already worked one of the duplicates (changed its stage
+        or added notes), that one is kept; otherwise the earliest-added
+        one is kept. Returns one summary dict per group actually merged.
+        """
+        rows = self.conn.execute(
+            "SELECT id, company, title, stage, notes, created_at FROM leads "
+            "WHERE source = 'osm_places' ORDER BY id"
+        ).fetchall()
+
+        groups: dict[tuple[str, str], list[sqlite3.Row]] = {}
+        for row in rows:
+            match = re.search(r"\(([^)]+)\)\s*$", row["title"] or "")
+            locality = match.group(1) if match else ""
+            key = (row["company"].strip().lower(), locality)
+            groups.setdefault(key, []).append(row)
+
+        def already_worked(row: sqlite3.Row) -> bool:
+            return row["stage"] != "New" or bool((row["notes"] or "").strip())
+
+        merged_summaries = []
+        for (_, locality), group_rows in groups.items():
+            if len(group_rows) < 2:
+                continue
+
+            worked_rows = [r for r in group_rows if already_worked(r)]
+            primary = worked_rows[0] if worked_rows else group_rows[0]
+            duplicates = [r for r in group_rows if r["id"] != primary["id"]]
+
+            for dup in duplicates:
+                self.conn.execute("DELETE FROM leads WHERE id = ?", (dup["id"],))
+
+            merged_summaries.append(
+                {
+                    "company": group_rows[0]["company"],
+                    "locality": locality,
+                    "kept_id": primary["id"],
+                    "removed_ids": [d["id"] for d in duplicates],
+                }
+            )
+
+        self.conn.commit()
+        return merged_summaries

@@ -56,6 +56,17 @@ sources:
     enabled: false   # weak fit — this is a dev/startup audience, not your buyer
   google_news:
     enabled: true    # best source for tenders, RERA announcements, project launches
+    # Without these, every query defaults to the US edition of Google
+    # News, which is why an unqualified "panic button system" mostly
+    # returns US school-safety news. query_suffix biases the search
+    # itself toward India; it does NOT change what counts as a keyword
+    # match above (scoring still uses the plain keywords list), so this
+    # can't cause a real match to stop being found.
+    query_suffix: "India"
+    edition:
+      hl: "en-IN"
+      gl: "IN"
+      ceid: "IN:en"
   github:
     enabled: false   # no plausible lead signal for this product
     token_env_var: "GITHUB_TOKEN"

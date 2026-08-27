@@ -24,6 +24,7 @@ abhayleads fetch --source reddit   search just one source
 abhayleads list --due              leads due for follow-up
 abhayleads update 42 --stage Contacted --notes "sent intro email"
 abhayleads stats                   pipeline summary
+abhayleads dedupe                  merge osm_places leads that are the same place mapped twice
 ```
 
 Running the built `Leads.exe` with no arguments opens the same CRM

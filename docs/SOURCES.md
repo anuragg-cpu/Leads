@@ -15,6 +15,35 @@ Uses Google News' public RSS search feed. No key, no setup.
 Best for: catching press mentions, funding news, "X launches" stories -
 useful as buying-intent/growth signals for outbound targets.
 
+**Region matters a lot.** Left unconfigured, every query hits the US
+edition of Google News (`hl=en-US&gl=US`), so a generic keyword like
+"panic button system" comes back almost entirely as US school/hospital
+news - not useful if your buyer is elsewhere. Two settings fix this,
+and neither changes what counts as a keyword match (scoring still uses
+your plain `product.keywords` list, untouched):
+
+```yaml
+sources:
+  google_news:
+    query_suffix: "India"        # appended to every search query
+    edition:
+      hl: "en-IN"                 # language
+      gl: "IN"                    # country
+      ceid: "IN:en"                # country:language, Google's combined param
+```
+
+Swap `India`/`IN` for your own market. You can also narrow further
+(e.g. `query_suffix: "Pune"`) at the cost of missing broader regional
+coverage.
+
+**If real matches are still scoring 0**: scoring does exact substring
+matching on your `product.keywords` phrases. Google's own search is
+fuzzy, so it can return an article that's clearly relevant but never
+literally contains your exact phrase - e.g. a keyword `"panic button
+system"` won't match a headline that only says "panic button" without
+"system". If you notice this, add the shorter/more common phrasing as
+its own keyword.
+
 ## GitHub (`github`)
 
 Uses the free public GitHub REST search API.
@@ -77,6 +106,20 @@ a cold-outreach target list, not a "someone's actively looking" signal.
 Keep `target_locations` at town/locality granularity - a state-level
 entry like "Maharashtra" geocodes to one point near the state's center,
 and a few-km radius around it won't cover much.
+
+**Duplicate places**: OSM occasionally maps one real building as two
+separate map elements (a data-entry slip, not something this tool can
+detect in advance). Two elements with the *exact same name* found within
+the same locality in a single fetch are automatically collapsed into one
+lead. This is intentionally exact-match only - "Prakrtii CHS G Block"
+and "...F Block" are kept as separate leads, since multi-block societies
+often do need separate outreach per block/wing.
+
+If you're upgrading from before this existed (or fetched a lot before
+noticing duplicates), run `abhayleads dedupe` once to clean up your
+existing database the same way - it keeps whichever duplicate you've
+already worked (non-"New" stage or has notes), or the earliest one
+otherwise.
 
 ### If `osm_places` keeps failing
 

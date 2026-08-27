@@ -128,6 +128,19 @@ def cmd_stats(args):
     db.close()
 
 
+def cmd_dedupe(args):
+    db = _get_db(args)
+    summaries = db.merge_exact_duplicate_osm_leads()
+    if not summaries:
+        print("No exact-duplicate osm_places leads found.")
+    else:
+        total_removed = sum(len(s["removed_ids"]) for s in summaries)
+        print(f"Merged {len(summaries)} duplicate group(s), removed {total_removed} duplicate lead(s):")
+        for s in summaries:
+            print(f"  {s['company']} ({s['locality']}): kept #{s['kept_id']}, removed {s['removed_ids']}")
+    db.close()
+
+
 def cmd_gui(args):
     from .gui.app import launch
 
@@ -169,6 +182,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_stats = sub.add_parser("stats", help="Pipeline summary and last fetch run")
     p_stats.set_defaults(func=cmd_stats)
+
+    p_dedupe = sub.add_parser(
+        "dedupe", help="Merge osm_places leads with an identical name in the same locality"
+    )
+    p_dedupe.set_defaults(func=cmd_dedupe)
 
     p_gui = sub.add_parser("gui", help="Open the CRM window")
     p_gui.set_defaults(func=cmd_gui)

@@ -105,6 +105,62 @@ def test_stats_counts_by_stage_and_source(db):
     assert stats["by_source"]["reddit"] == 1
 
 
+def make_osm_candidate(company: str, locality: str, source_detail: str):
+    return LeadCandidate(
+        source="osm_places",
+        source_detail=source_detail,
+        company=company,
+        title=f"Housing society / apartment complex: {company} ({locality})",
+        raw_text=f"Housing society near {locality}",
+    )
+
+
+def test_merge_exact_duplicate_osm_leads_collapses_same_name_same_locality(db):
+    id1, _ = db.upsert_candidate(
+        make_osm_candidate("Prakrtii CHS G Block", "Baner", "https://osm/way/1"), score=30
+    )
+    id2, _ = db.upsert_candidate(
+        make_osm_candidate("Prakrtii CHS G Block", "Baner", "https://osm/node/2"), score=30
+    )
+
+    summaries = db.merge_exact_duplicate_osm_leads()
+
+    assert len(summaries) == 1
+    assert summaries[0]["kept_id"] == min(id1, id2)
+    assert summaries[0]["removed_ids"] == [max(id1, id2)]
+    assert db.get_lead(max(id1, id2)) is None
+    assert len(db.list_leads(source="osm_places")) == 1
+
+
+def test_merge_exact_duplicate_osm_leads_keeps_different_names_and_localities(db):
+    db.upsert_candidate(make_osm_candidate("Prakrtii CHS G Block", "Baner", "https://osm/way/1"), score=30)
+    db.upsert_candidate(make_osm_candidate("Prakrtii CHS F Block", "Baner", "https://osm/way/2"), score=30)
+    db.upsert_candidate(make_osm_candidate("Prakrtii CHS G Block", "Aundh", "https://osm/way/3"), score=30)
+
+    summaries = db.merge_exact_duplicate_osm_leads()
+
+    assert summaries == []
+    assert len(db.list_leads(source="osm_places")) == 3
+
+
+def test_merge_exact_duplicate_osm_leads_preserves_the_worked_one(db):
+    id1, _ = db.upsert_candidate(
+        make_osm_candidate("Prakrtii CHS G Block", "Baner", "https://osm/way/1"), score=30
+    )
+    id2, _ = db.upsert_candidate(
+        make_osm_candidate("Prakrtii CHS G Block", "Baner", "https://osm/node/2"), score=30
+    )
+    db.update_lead(id2, stage="Contacted", notes="spoke to the secretary")
+
+    summaries = db.merge_exact_duplicate_osm_leads()
+
+    assert summaries[0]["kept_id"] == id2
+    remaining = db.get_lead(id2)
+    assert remaining["stage"] == "Contacted"
+    assert remaining["notes"] == "spoke to the secretary"
+    assert db.get_lead(id1) is None
+
+
 def test_fetch_run_lifecycle(db):
     run_id = db.start_fetch_run(["hackernews", "reddit"])
     db.finish_fetch_run(run_id, new_leads=3, updated_leads=1, errors=[])

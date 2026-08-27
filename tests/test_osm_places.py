@@ -84,3 +84,31 @@ def test_fetch_keeps_results_from_other_localities_when_one_fails(tmp_path, monk
     assert candidates[0].company == "Test Hospital"
     assert len(source.warnings) == 1
     assert "Baner" in source.warnings[0]
+
+
+def test_fetch_collapses_exact_same_name_within_one_locality(tmp_path, monkeypatch):
+    # Regression test: OSM sometimes maps one real building as two
+    # elements (e.g. a duplicate node), which used to show up as two
+    # identical leads in the CRM.
+    monkeypatch.setattr(
+        "abhayleads.sources.osm_places.default_paths",
+        lambda: (tmp_path / "config", tmp_path),
+    )
+    monkeypatch.setattr("abhayleads.sources.osm_places.time.sleep", lambda *_: None)
+
+    source = OSMPlacesSource({"target_locations": ["Baner"], "categories": ["residential"]})
+    monkeypatch.setattr(source, "_geocode", lambda locality: {"lat": 1.0, "lon": 2.0})
+    monkeypatch.setattr(
+        source,
+        "_query_overpass",
+        lambda point, radius, categories: [
+            ({"type": "way", "id": 1, "tags": {"name": "Prakrtii CHS G Block"}}, "Housing society"),
+            ({"type": "node", "id": 2, "tags": {"name": "Prakrtii CHS G Block"}}, "Housing society"),
+            ({"type": "way", "id": 3, "tags": {"name": "Prakrtii CHS F Block"}}, "Housing society"),
+        ],
+    )
+
+    candidates = source.fetch(keywords=[])
+
+    names = sorted(c.company for c in candidates)
+    assert names == ["Prakrtii CHS F Block", "Prakrtii CHS G Block"]

@@ -127,10 +127,21 @@ class OSMPlacesSource(BaseLeadSource):
                 time.sleep(1)
                 continue
 
+            # OSM sometimes maps one real building/complex as two overlapping
+            # elements (a way plus a duplicate node, common data-entry slip).
+            # Collapse exact same-name repeats within this locality's batch -
+            # deliberately NOT fuzzy: "Prakrtii CHS G Block" and "...F Block"
+            # are kept as separate leads since they're genuinely different
+            # named entities that may need separate outreach.
+            seen_names_this_locality: set[str] = set()
             for element, label in elements:
                 candidate = self._element_to_candidate(element, locality, label)
                 if candidate is None or candidate.source_detail in seen_urls:
                     continue
+                name_key = candidate.company.strip().lower()
+                if name_key in seen_names_this_locality:
+                    continue
+                seen_names_this_locality.add(name_key)
                 seen_urls.add(candidate.source_detail)
                 candidates.append(candidate)
             time.sleep(1)
