@@ -1,0 +1,19 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+
+# real config (has your keywords/keys) and local data - only the example
+# in config/ is meant to be committed
+config/config.yaml
+*.db
+osm_geocode_cache.json
+
+# local profile data when run from source (python -m abhayleads uses
+# repo-relative paths in dev mode; a packaged .exe uses %USERPROFILE% instead)
+/profiles/
+/profiles.json
