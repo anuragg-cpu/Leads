@@ -5,6 +5,8 @@ product:
   keywords:
     - "emergency alert system"
     - "panic button system"
+    - "panic button"          # shorter/plain phrasing - catches real headlines
+                               # that say "panic buttons" without "system"
     - "wireless emergency button"
     - "duress alarm"
     - "campus safety system"

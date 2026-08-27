@@ -20,10 +20,24 @@ Open a terminal (PowerShell or cmd) in the repo folder and run:
 packaging\setup_windows.bat
 ```
 
-This creates a `venv\` virtual environment, installs dependencies, and
-copies `config/config.example.yaml` to `%USERPROFILE%\AbhayLeads\config\config.yaml`
-- **that's the file you actually edit** with Abhay's keywords once you
-have them (the one in `config/` under the repo is just the template).
+This creates a `venv\` virtual environment and installs dependencies.
+
+**Where your data lives depends on how you run it** - this trips people
+up, so note it now:
+- **Running from source** (`venv\Scripts\python -m abhayleads ...`,
+  what step 3 below uses): profiles, config, and leads all live inside
+  the repo folder itself, under `profiles\` (gitignored - never
+  committed). Convenient for development since it's all in one place
+  you can just look at.
+- **Running the built `Leads.exe`** (step 4): profiles live under
+  `%USERPROFILE%\AbhayLeads\profiles\` instead, so a rebuild (or
+  deleting the repo folder) never touches your real data.
+
+Either way, the very first time you run any command it auto-creates a
+profile called "default" with a copy of `config/config.example.yaml` -
+**that per-profile copy is what you actually edit**, not the template
+in `config/` under the repo. Easiest way to edit it: **File -> Edit
+Config** in the GUI, or find its path with `abhayleads profile list`.
 
 ## 3. Run it without building the .exe yet
 
@@ -34,7 +48,8 @@ venv\Scripts\python -m abhayleads stats
 ```
 
 This is the fastest loop while you're still tuning keywords - no
-rebuild needed between changes.
+rebuild needed between changes. (Remember: this reads/writes
+`<repo>\profiles\`, not `%USERPROFILE%\AbhayLeads\` - see above.)
 
 ## 4. Build Leads.exe
 
@@ -57,9 +72,15 @@ You can copy the whole `dist\Leads\` folder anywhere (e.g. pin
 `Leads.exe` to your taskbar/Start menu) - it's self-contained and
 doesn't need Python installed on a machine you move it to.
 
-Data (the SQLite database and your config.yaml) always lives in
-`%USERPROFILE%\AbhayLeads\`, not inside the app folder, so rebuilding
-the .exe never touches your leads.
+Once built, all profile data (each profile's SQLite database and
+config.yaml) lives in `%USERPROFILE%\AbhayLeads\profiles\`, not inside
+the app folder, so rebuilding the .exe never touches your leads. Note
+this is a **different location** than step 3's dev-mode run used (see
+the note in step 2) - the exe starts with no profiles of its own the
+first time, not whatever you built up while testing from source. To
+carry your dev-mode profiles forward, copy `<repo>\profiles\` to
+`%USERPROFILE%\AbhayLeads\profiles\`; otherwise just start fresh
+(`Leads.exe profile create "Abhay"`).
 
 ## 5. Keeping it updated
 

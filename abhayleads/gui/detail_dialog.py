@@ -1,6 +1,7 @@
 """Detail/edit dialog for a single lead."""
 
-from PyQt6.QtCore import QDate
+from PyQt6.QtCore import QDate, QUrl
+from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -8,8 +9,11 @@ from PyQt6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPlainTextEdit,
+    QPushButton,
     QVBoxLayout,
 )
 
@@ -18,6 +22,14 @@ from ..models import STAGES
 
 
 class LeadDetailDialog(QDialog):
+    """Full view/edit screen for one lead - opened by double-clicking a
+    row, pressing Enter on a selected row, or the table's right-click
+    menu. Every field a source might have gotten wrong or left blank
+    (company name, contact, email, phone, URL) is editable here, since
+    OSM/news sources rarely have a phone number - you fill that in once
+    you've actually called or visited the place.
+    """
+
     def __init__(self, db: Database, lead_id: int, parent=None):
         super().__init__(parent)
         self.db = db
@@ -25,19 +37,34 @@ class LeadDetailDialog(QDialog):
         lead = db.get_lead(lead_id)
 
         self.setWindowTitle(f"Lead #{lead_id} - {lead['company'] or lead['contact_name'] or lead['source']}")
-        self.resize(520, 520)
+        self.resize(560, 620)
 
         layout = QVBoxLayout(self)
         form = QFormLayout()
 
-        form.addRow("Company:", QLabel(lead["company"] or "-"))
-        form.addRow("Contact:", QLabel(lead["contact_name"] or "-"))
-        form.addRow("Title:", QLabel(lead["title"] or "-"))
-        form.addRow("Email:", QLabel(lead["email"] or "-"))
-        form.addRow("Phone:", QLabel(lead["phone"] or "-"))
-        url_label = QLabel(f'<a href="{lead["url"]}">{lead["url"]}</a>' if lead["url"] else "-")
-        url_label.setOpenExternalLinks(True)
-        form.addRow("URL:", url_label)
+        self.company_edit = QLineEdit(lead["company"])
+        form.addRow("Company:", self.company_edit)
+
+        self.contact_edit = QLineEdit(lead["contact_name"])
+        form.addRow("Contact name:", self.contact_edit)
+
+        self.title_edit = QLineEdit(lead["title"])
+        form.addRow("Title:", self.title_edit)
+
+        self.email_edit = QLineEdit(lead["email"])
+        form.addRow("Email:", self.email_edit)
+
+        self.phone_edit = QLineEdit(lead["phone"])
+        form.addRow("Phone:", self.phone_edit)
+
+        url_row = QHBoxLayout()
+        self.url_edit = QLineEdit(lead["url"])
+        url_row.addWidget(self.url_edit)
+        open_url_button = QPushButton("Open")
+        open_url_button.clicked.connect(self._open_url)
+        url_row.addWidget(open_url_button)
+        form.addRow("URL:", url_row)
+
         form.addRow("Source:", QLabel(f"{lead['source']} ({lead['source_detail']})"))
         form.addRow("Keywords matched:", QLabel(lead["keyword_matched"] or "-"))
         form.addRow("Score:", QLabel(str(lead["score"])))
@@ -78,6 +105,11 @@ class LeadDetailDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
+    def _open_url(self):
+        url = self.url_edit.text().strip()
+        if url:
+            QDesktopServices.openUrl(QUrl(url))
+
     def _save(self):
         follow_up = None
         clear_follow_up = False
@@ -92,5 +124,11 @@ class LeadDetailDialog(QDialog):
             notes=self.notes_edit.toPlainText(),
             next_follow_up=follow_up,
             clear_follow_up=clear_follow_up,
+            company=self.company_edit.text(),
+            contact_name=self.contact_edit.text(),
+            title=self.title_edit.text(),
+            email=self.email_edit.text(),
+            phone=self.phone_edit.text(),
+            url=self.url_edit.text(),
         )
         self.accept()

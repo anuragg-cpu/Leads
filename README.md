@@ -1,6 +1,8 @@
 # Abhay Leads
 
-A local, free-sources lead generation CRM for **Abhay**.
+A local, free-sources lead generation CRM - built for **Abhay**, and set
+up so you can run the same tool for another product/company as a
+separate **profile** with its own keywords and its own leads.
 
 Runs entirely on your machine: it searches free/legal public sources for
 people or companies who look like a good fit, scores them against
@@ -9,8 +11,9 @@ a desktop window or from the command line.
 
 **Where to start:**
 1. `docs/SETUP_WINDOWS.md` - install and build `Leads.exe`
-2. Edit `%USERPROFILE%\AbhayLeads\config\config.yaml` with Abhay's
-   keywords once you have them (template: `config/config.example.yaml`)
+2. First run creates a profile automatically. Edit its keywords either
+   from the GUI (**File -> Edit Config**) or by hand - `abhayleads
+   profile list` shows you where each profile's `config.yaml` lives.
 3. `docs/MARKETING_BASICS.md` - if you're new to this, read this first
 4. `docs/SOURCES.md` - what each lead source does and how to set up the
    free ones that need a key/token
@@ -22,14 +25,45 @@ abhayleads gui                     open the CRM window
 abhayleads fetch                   search all enabled sources for new leads
 abhayleads fetch --source reddit   search just one source
 abhayleads list --due              leads due for follow-up
+abhayleads show 42                 full detail for lead 42
 abhayleads update 42 --stage Contacted --notes "sent intro email"
+abhayleads update 42 --phone "+91 98765 43210" --email "x@y.com"
 abhayleads stats                   pipeline summary
 abhayleads dedupe                  merge osm_places leads that are the same place mapped twice
+abhayleads reset                   delete ALL leads in the current profile to start over
 ```
 
 Running the built `Leads.exe` with no arguments opens the same CRM
 window; any of the subcommands above work the same way, e.g.
 `Leads.exe fetch`.
+
+### Profiles - running this for more than one product
+
+Each profile is a separate `config.yaml` + `leads.db`, so a second
+product's keywords and leads never mix with Abhay's.
+
+```
+abhayleads profile list                    * marks the active one
+abhayleads profile create "OtherCo"        new profile, starts from the template
+abhayleads profile use "OtherCo"           switch which profile fetch/list/gui use
+abhayleads --profile "OtherCo" fetch       run one command against a specific profile
+abhayleads profile delete "OtherCo"        remove it from the list (keeps its files)
+abhayleads profile delete "OtherCo" --delete-files   also delete its config.yaml/leads.db
+```
+
+The GUI has the same thing under the **Profile** menu, plus **File ->
+Edit Config** to edit the active profile's `config.yaml` as raw text
+without leaving the app (it validates the YAML before saving, so a typo
+can't silently break your next fetch).
+
+### Editing a lead
+
+Double-click any row (or select it and press Enter, or right-click ->
+Open/Edit Lead) to open its detail screen. Every field is editable -
+company name, contact name, email, phone, URL, stage, follow-up date,
+notes - since sources like OSM or Google News rarely come with a phone
+number; you fill that in yourself once you've actually called or
+visited the place.
 
 ## Project layout
 
@@ -38,10 +72,11 @@ abhayleads/          the application
   sources/            one file per lead source (add more here)
   gui/                PyQt6 desktop CRM
   db.py               SQLite storage
+  profiles.py          multi-profile support (separate config.yaml + leads.db per product)
   scoring.py           keyword-based lead scoring
   fetcher.py           orchestrates a fetch run
   cli.py               command-line interface
-config/config.example.yaml   config template (copy to config.yaml, don't edit this one)
+config/config.example.yaml   template a new profile starts from
 docs/                  setup + marketing-basics guides
 packaging/              Windows setup/build scripts + PyInstaller spec
 tests/

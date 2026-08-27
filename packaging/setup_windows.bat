@@ -12,14 +12,10 @@ call venv\Scripts\activate.bat
 pip install --upgrade pip
 pip install -r requirements.txt
 
-if not exist "%USERPROFILE%\AbhayLeads\config" mkdir "%USERPROFILE%\AbhayLeads\config"
-if not exist "%USERPROFILE%\AbhayLeads\config\config.yaml" (
-    copy config\config.example.yaml "%USERPROFILE%\AbhayLeads\config\config.yaml"
-    echo Created %USERPROFILE%\AbhayLeads\config\config.yaml - edit this to add your keywords.
-)
-
 echo.
 echo Setup complete. Next steps:
-echo   1. Edit %USERPROFILE%\AbhayLeads\config\config.yaml
-echo   2. Run:  venv\Scripts\python -m abhayleads gui
+echo   1. Run:  venv\Scripts\python -m abhayleads gui
+echo      (first run auto-creates a "default" profile from config\config.example.yaml)
+echo   2. Edit its keywords: File -^> Edit Config in the GUI, or `abhayleads profile list`
+echo      shows you the file path to edit by hand instead.
 echo   3. When ready to build the .exe:  packaging\build_exe.bat

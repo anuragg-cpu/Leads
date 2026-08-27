@@ -12,3 +12,8 @@ dist/
 config/config.yaml
 *.db
 osm_geocode_cache.json
+
+# local profile data when run from source (python -m abhayleads uses
+# repo-relative paths in dev mode; a packaged .exe uses %USERPROFILE% instead)
+/profiles/
+/profiles.json

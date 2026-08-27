@@ -221,6 +221,12 @@ class Database:
         notes: Optional[str] = None,
         next_follow_up: Optional[str] = None,
         clear_follow_up: bool = False,
+        company: Optional[str] = None,
+        contact_name: Optional[str] = None,
+        title: Optional[str] = None,
+        email: Optional[str] = None,
+        phone: Optional[str] = None,
+        url: Optional[str] = None,
     ):
         lead = self.get_lead(lead_id)
         if lead is None:
@@ -249,6 +255,23 @@ class Database:
             fields.append("next_follow_up = ?")
             params.append(next_follow_up)
 
+        # Contact/identifying fields - these come in from the source (OSM,
+        # Google News, ...) but are frequently incomplete (no phone/email),
+        # so the CRM lets you fill them in by hand once you've actually
+        # called/visited the place.
+        editable_text_fields = {
+            "company": company,
+            "contact_name": contact_name,
+            "title": title,
+            "email": email,
+            "phone": phone,
+            "url": url,
+        }
+        for column, value in editable_text_fields.items():
+            if value is not None:
+                fields.append(f"{column} = ?")
+                params.append(value)
+
         if not fields:
             return
 
@@ -261,6 +284,17 @@ class Database:
     def delete_lead(self, lead_id: int):
         self.conn.execute("DELETE FROM leads WHERE id = ?", (lead_id,))
         self.conn.commit()
+
+    def delete_all_leads(self) -> int:
+        """Wipes every lead, its stage history, and fetch-run log - used to
+        start over from scratch. Does not touch config.yaml. Returns how
+        many leads were removed."""
+        count = self.conn.execute("SELECT COUNT(*) as n FROM leads").fetchone()["n"]
+        self.conn.execute("DELETE FROM stage_history")
+        self.conn.execute("DELETE FROM leads")
+        self.conn.execute("DELETE FROM fetch_runs")
+        self.conn.commit()
+        return count
 
     def merge_exact_duplicate_osm_leads(self) -> list[dict]:
         """Collapses osm_places leads that share an identical company name

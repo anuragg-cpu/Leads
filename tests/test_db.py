@@ -169,3 +169,48 @@ def test_fetch_run_lifecycle(db):
     assert last_run["id"] == run_id
     assert last_run["new_leads"] == 3
     assert last_run["updated_leads"] == 1
+
+
+def test_update_lead_can_edit_contact_fields(db):
+    lead_id, _ = db.upsert_candidate(make_candidate(), score=50)
+
+    db.update_lead(
+        lead_id,
+        company="Acme Corp",
+        contact_name="Jane Doe",
+        title="Facilities Manager",
+        email="jane@acme.example",
+        phone="+91 98765 43210",
+        url="https://acme.example",
+    )
+
+    lead = db.get_lead(lead_id)
+    assert lead["company"] == "Acme Corp"
+    assert lead["contact_name"] == "Jane Doe"
+    assert lead["title"] == "Facilities Manager"
+    assert lead["email"] == "jane@acme.example"
+    assert lead["phone"] == "+91 98765 43210"
+    assert lead["url"] == "https://acme.example"
+
+
+def test_update_lead_contact_fields_default_to_untouched(db):
+    lead_id, _ = db.upsert_candidate(make_candidate(company="Original"), score=50)
+    db.update_lead(lead_id, notes="just a note")
+
+    lead = db.get_lead(lead_id)
+    assert lead["company"] == "Original"  # untouched when not passed
+
+
+def test_delete_all_leads_wipes_leads_history_and_runs(db):
+    id1, _ = db.upsert_candidate(make_candidate(source_detail="a"), score=10)
+    db.upsert_candidate(make_candidate(source_detail="b"), score=20)
+    db.update_lead(id1, stage="Contacted")
+    run_id = db.start_fetch_run(["hackernews"])
+    db.finish_fetch_run(run_id, new_leads=2, updated_leads=0, errors=[])
+
+    removed = db.delete_all_leads()
+
+    assert removed == 2
+    assert db.list_leads() == []
+    assert db.stage_history(id1) == []
+    assert db.last_fetch_run() is None
