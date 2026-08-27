@@ -1,7 +1,7 @@
 """Base class every lead source implements."""
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Callable
 
 from ..models import LeadCandidate
 
@@ -12,11 +12,20 @@ from ..models import LeadCandidate
 USER_AGENT = "AbhayLeadsBot/0.1 (personal lead-research tool; contact: set-your-email-in-config)"
 
 
+def _noop(_message: str) -> None:
+    pass
+
+
 class BaseLeadSource(ABC):
     name: str = "base"
 
     def __init__(self, source_config: dict[str, Any]):
         self.source_config = source_config
+        #: Set by fetcher.run_fetch before each call, so a slow source (one
+        #: making many network requests, like osm_places) can report which
+        #: item it's on instead of going silent for minutes at a time.
+        #: Sources that finish in one or two quick requests can ignore this.
+        self.progress_callback: Callable[[str], None] = _noop
 
     @abstractmethod
     def fetch(self, keywords: list[str]) -> list[LeadCandidate]:

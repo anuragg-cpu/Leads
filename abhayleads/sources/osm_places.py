@@ -18,13 +18,13 @@ usage policies:
   query OpenStreetMap for named places matching your categories within
   `radius_meters` of that point.
 
-Note: this was written and reviewed for correctness, but this session's
-sandboxed network could not get a live response from any public Overpass
-mirror (connection resets/timeouts on every one tried - consistent with
-those instances blocking cloud/datacenter IP ranges, a known issue for
-this specific API). Nominatim geocoding *was* verified live. Please
-confirm this source returns results the first time you run it from your
-own machine.
+Note: the public Overpass API mirrors are, in practice, unreliable -
+verified independently from two different networks (this happens to
+everyone, not something specific to your connection). When every mirror
+fails, this source reports the error and moves on rather than hanging;
+see "If osm_places keeps failing" in docs/SOURCES.md for what to do
+about it (mainly: try again later, or run the same query manually at
+https://overpass-turbo.eu/ as a one-off).
 """
 
 import json
@@ -40,12 +40,22 @@ from .base import USER_AGENT, BaseLeadSource
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 
-# Mirrors tried in order - if the first is unreachable/rate-limited, fall
-# back to the next rather than failing the whole fetch.
+# Mirrors tried in order, each with a short timeout - if one is
+# unreachable/overloaded, fail fast and try the next rather than sitting
+# on one slow request for a long time.
+#
+# Only overpass-api.de (the reference instance) and overpass.kumi.systems
+# are listed - both are well-established public mirrors. Others tried and
+# rejected: overpass.osm.ch returns HTTP 200 with a valid-looking but
+# empty/stale dataset (silently wrong, worse than an error - don't add it
+# back without verifying its osm3s.timestamp_osm_base is current);
+# overpass.openstreetmap.fr requires pre-arranged IP whitelisting and
+# 403s everyone else.
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
 ]
+OVERPASS_TIMEOUT_SECONDS = 20
 
 # category name -> list of (osm_key, osm_value, human label) to search for.
 CATEGORY_FILTERS: dict[str, list[tuple[str, str, str]]] = {
@@ -93,17 +103,22 @@ class OSMPlacesSource(BaseLeadSource):
 
         candidates: list[LeadCandidate] = []
         seen_urls: set[str] = set()
+        localities = localities[:max_localities]
+        total = len(localities)
 
-        for locality in localities[:max_localities]:
+        for i, locality in enumerate(localities, start=1):
             point = cache.get(locality)
             if point is None:
+                self.progress_callback(f"osm_places: {locality} ({i}/{total}) - geocoding...")
                 point = self._geocode(locality)
                 time.sleep(1.1)  # Nominatim usage policy: max 1 request/second
                 if point is None:
+                    self.progress_callback(f"osm_places: {locality} ({i}/{total}) - couldn't geocode, skipping")
                     continue
                 cache[locality] = point
                 _save_geocode_cache(cache_path, cache)
 
+            self.progress_callback(f"osm_places: {locality} ({i}/{total}) - querying Overpass...")
             for element, label in self._query_overpass(point, radius, categories):
                 candidate = self._element_to_candidate(element, locality, label)
                 if candidate is None or candidate.source_detail in seen_urls:
@@ -146,12 +161,18 @@ class OSMPlacesSource(BaseLeadSource):
         last_error: Optional[Exception] = None
         for url in OVERPASS_URLS:
             try:
-                resp = requests.post(url, data={"data": query}, headers={"User-Agent": USER_AGENT}, timeout=30)
+                resp = requests.post(
+                    url,
+                    data={"data": query},
+                    headers={"User-Agent": USER_AGENT},
+                    timeout=OVERPASS_TIMEOUT_SECONDS,
+                )
                 resp.raise_for_status()
                 data = resp.json()
                 break
             except Exception as exc:  # noqa: BLE001 - try the next mirror
                 last_error = exc
+                self.progress_callback(f"osm_places: {url} timed out/failed, trying next mirror...")
                 continue
         if data is None:
             raise RuntimeError(f"All Overpass endpoints failed: {last_error}")

@@ -49,6 +49,7 @@ def run_fetch(
     for source in sources:
         if progress:
             progress(f"Searching {source.name}...")
+            source.progress_callback = progress
         candidates, source_errors = source.safe_fetch(keywords)
         errors.extend(source_errors)
 

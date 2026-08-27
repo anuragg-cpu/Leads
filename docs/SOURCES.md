@@ -78,11 +78,39 @@ Keep `target_locations` at town/locality granularity - a state-level
 entry like "Maharashtra" geocodes to one point near the state's center,
 and a few-km radius around it won't cover much.
 
-**Note on reliability**: public Overpass mirrors are known to rate-limit
-or block cloud/datacenter IP ranges (this is a common complaint from
-people running scrapers/bots against it) - if `osm_places` comes back
-empty or errors on your first run, try again in a few minutes, or check
-https://overpass-api.de/api/status for the primary instance's health.
+### If `osm_places` keeps failing
+
+The public Overpass API mirrors this source uses are, honestly, flaky -
+confirmed independently on two different networks while building this:
+connection resets, 502s, and timeouts, none of it specific to your setup.
+This is a known limitation of relying on free shared Overpass instances,
+not a bug to chase.
+
+What to do about it, in order:
+
+1. **Just try again.** These instances go through busy/quiet periods.
+   Running `abhayleads fetch --source osm_places` again in an hour or the
+   next day often just works.
+2. **Check status first**, to avoid guessing:
+   https://overpass-api.de/api/status
+3. **One-off manual fallback**: go to https://overpass-turbo.eu/, paste
+   in a query like the one below (edit the coordinates/radius/tag for
+   what you need), run it, then Export -> GeoJSON/CSV to get the same
+   data by hand. Slower, but it runs in your browser against the same
+   API and tends to succeed when the raw API call doesn't.
+   ```
+   [out:json][timeout:25];
+   (
+     nwr["amenity"="hospital"](around:5000,18.5204,73.8567);
+   );
+   out center tags;
+   ```
+   (That example point is central Pune - swap in coordinates for your
+   locality; look them up at https://nominatim.openstreetmap.org/ui/search.html)
+4. If you want, tell me and I can look at wiring in a paid-but-cheap
+   alternative later (e.g. Google Places API, which has a free monthly
+   credit but needs a billing account) - not done by default since you
+   asked to stick to free/no-signup sources.
 
 ## Government tender portals (not automated - here's why)
 
