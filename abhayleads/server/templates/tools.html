@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Tools - Abhay Leads{% endblock %}
+{% block content %}
+
+<div class="card">
+  <h3 style="margin-top:0;">Merge duplicates</h3>
+  <p style="font-size:14px; color:#555;">
+    Merges osm_places leads that are the exact same name in the same locality
+    (e.g. the same building mapped twice in OpenStreetMap).
+  </p>
+  <form method="post" action="/tools/dedupe">
+    <button type="submit" class="save-button">Merge duplicates</button>
+  </form>
+</div>
+
+<div class="card">
+  <h3 style="margin-top:0;">Reset all leads</h3>
+  <p style="font-size:14px; color:#555;">
+    Permanently deletes every lead. Type <strong>DELETE</strong> to confirm.
+    Your config isn't affected.
+  </p>
+  <form method="post" action="/tools/reset" onsubmit="return confirm('This deletes ALL leads. Are you sure?');">
+    <input type="text" name="confirm" placeholder="Type DELETE to confirm"
+           style="width:100%; padding:10px; border:1px solid #d1d1d6; border-radius:8px; font-size:16px; margin-bottom:10px;">
+    <button type="submit" class="danger-button">Delete all leads</button>
+  </form>
+</div>
+
+{% endblock %}

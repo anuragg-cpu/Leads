@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}{% if lead %}{{ lead.company or lead.contact_name or "Lead" }}{% else %}Add Lead{% endif %} - Abhay Leads{% endblock %}
+{% block content %}
+
+<a href="/" class="back-link">&larr; All leads</a>
+
+{% if saved %}<div class="saved-banner">Saved.</div>{% endif %}
+
+<div class="card">
+{% if lead %}
+  <p style="font-size:13px; color:#888; margin-top:0;">
+    Source: {{ lead.source }} &middot; Score: {{ lead.score }}
+    {% if lead.keyword_matched %}&middot; Matched: {{ lead.keyword_matched }}{% endif %}
+  </p>
+{% endif %}
+
+<form class="detail-form" method="post" action="{% if lead %}/leads/{{ lead.id }}{% else %}/leads/new{% endif %}">
+  <label for="company">Company</label>
+  <input type="text" id="company" name="company" value="{{ lead.company if lead else '' }}">
+
+  <label for="contact_name">Contact name</label>
+  <input type="text" id="contact_name" name="contact_name" value="{{ lead.contact_name if lead else '' }}">
+
+  <label for="title">Title</label>
+  <input type="text" id="title" name="title" value="{{ lead.title if lead else '' }}">
+
+  <label for="email">Email</label>
+  <input type="email" id="email" name="email" value="{{ lead.email if lead else '' }}">
+
+  <label for="phone">Phone</label>
+  <input type="text" id="phone" name="phone" value="{{ lead.phone if lead else '' }}">
+
+  <label for="url">URL</label>
+  <input type="text" id="url" name="url" value="{{ lead.url if lead else '' }}">
+
+  <label for="stage">Stage</label>
+  <select id="stage" name="stage">
+    {% for s in stages %}
+      <option value="{{ s }}" {% if (lead.stage if lead else 'New') == s %}selected{% endif %}>{{ s }}</option>
+    {% endfor %}
+  </select>
+
+  <label for="next_follow_up">Follow-up date</label>
+  <input type="date" id="next_follow_up" name="next_follow_up" value="{{ lead.next_follow_up if lead else '' }}">
+
+  <label for="notes">Notes</label>
+  <textarea id="notes" name="notes">{{ lead.notes if lead else '' }}</textarea>
+
+  <button type="submit" class="save-button">Save</button>
+</form>
+
+{% if lead and lead.raw_text %}
+  <label style="display:block; font-size:13px; color:#555; margin:16px 0 4px;">Raw text from source</label>
+  <div class="raw-text">{{ lead.raw_text }}</div>
+{% endif %}
+
+{% if history %}
+  <label style="display:block; font-size:13px; color:#555; margin:16px 0 4px;">Stage history</label>
+  <ul class="history-list">
+    {% for row in history %}<li>{{ row.changed_at }} &rarr; {{ row.stage }}</li>{% endfor %}
+  </ul>
+{% endif %}
+
+{% if lead %}
+  <form method="post" action="/leads/{{ lead.id }}/delete" onsubmit="return confirm('Delete this lead?');" style="margin-top:16px;">
+    <button type="submit" class="danger-button">Delete lead</button>
+  </form>
+{% endif %}
+</div>
+
+{% endblock %}

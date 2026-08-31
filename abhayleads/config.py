@@ -53,6 +53,22 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "ntfy_topic": "",
         "ntfy_base_url": "https://ntfy.sh",
     },
+    "server": {
+        # Empty by default - `abhayleads serve` refuses to start until
+        # you set this (run `abhayleads server-token` to generate one).
+        # See docs/SERVER_SETUP.md.
+        "token": "",
+        "host": "0.0.0.0",
+        "port": 8443,
+    },
+    # Point THIS install at someone else's `abhayleads serve` instead of a
+    # local database file - e.g. your desktop app talking to the office
+    # server. Empty base_url (the default) means "use the local profile's
+    # file, like always". See docs/SERVER_SETUP.md.
+    "remote_server": {
+        "base_url": "",
+        "token": "",
+    },
 }
 
 

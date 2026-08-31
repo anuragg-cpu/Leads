@@ -70,6 +70,12 @@ def make_dedup_key(candidate: LeadCandidate) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def row_to_dict(row: Optional[sqlite3.Row]) -> Optional[dict]:
+    """JSON-friendly conversion, used by the server (`abhayleads serve`)
+    to turn query results into API responses."""
+    return dict(row) if row is not None else None
+
+
 class Database:
     def __init__(self, db_path: Path):
         self.db_path = Path(db_path)

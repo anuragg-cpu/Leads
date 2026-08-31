@@ -20,6 +20,13 @@ Examples:
     abhayleads profile create "OtherCo"    new profile, own config.yaml + leads.db
     abhayleads profile use "OtherCo"       switch the active profile
     abhayleads --profile "OtherCo" fetch   run one command against another profile
+
+    abhayleads server-token                generate a token for serve/remote_server config
+    abhayleads serve --cert C.pem --key K.pem   run the HTTP server (docs/SERVER_SETUP.md)
+
+    Once remote_server.base_url is set in config.yaml, every command
+    above (fetch/list/update/add/stats/...) transparently operates
+    against that server instead of a local file - same commands, shared data.
 """
 
 import argparse
@@ -69,7 +76,18 @@ def _resolve_paths(args) -> tuple[Optional[Path], Path, Optional[str]]:
     return config_path, db_path, profile_name
 
 
-def _get_db(args) -> Database:
+def _get_db(args):
+    """Returns a Database or, if remote_server.base_url is configured, a
+    RemoteDatabase pointed at someone's `abhayleads serve` instance - the
+    two are interchangeable everywhere else in this file. See
+    docs/SERVER_SETUP.md.
+    """
+    config = _get_config(args)
+    remote = config.get("remote_server", {}) or {}
+    if remote.get("base_url"):
+        from .remote_db import RemoteDatabase
+
+        return RemoteDatabase(remote["base_url"], remote.get("token", ""))
     _, db_path, _ = _resolve_paths(args)
     return Database(db_path)
 
@@ -333,6 +351,50 @@ def cmd_gui(args):
     launch(db_path, config_path, profile_name)
 
 
+def cmd_server_token(args):
+    import secrets
+
+    print(secrets.token_urlsafe(32))
+    print(
+        "\nAdd this under `server:` in your config.yaml (for `abhayleads serve` to check "
+        "incoming requests against) and under `remote_server:` in any client's config.yaml "
+        "(the desktop app, or another machine's CLI) that should connect to it. "
+        "See docs/SERVER_SETUP.md.",
+        file=sys.stderr,
+    )
+
+
+def cmd_serve(args):
+    import uvicorn
+
+    from .server.app import create_app
+
+    config_path, db_path, profile_name = _resolve_paths(args)
+    config = load_config(config_path)
+    server_config = config.get("server", {}) or {}
+
+    try:
+        app = create_app(db_path, config)
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        sys.exit(1)
+
+    host = args.host or server_config.get("host", "0.0.0.0")
+    port = args.port or server_config.get("port", 8443)
+    profile_note = f" (profile: {profile_name})" if profile_name else ""
+
+    if args.cert and args.key:
+        print(f"Serving {db_path}{profile_note} on https://{host}:{port}")
+        uvicorn.run(app, host=host, port=port, ssl_certfile=args.cert, ssl_keyfile=args.key)
+    else:
+        print(
+            f"Serving {db_path}{profile_note} on http://{host}:{port} "
+            "(NO TLS - only safe for localhost/LAN testing, never expose this to the "
+            "internet without --cert/--key; see docs/SERVER_SETUP.md)"
+        )
+        uvicorn.run(app, host=host, port=port)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="abhayleads", description="Abhay Leads - local lead-gen CRM")
     parser.add_argument("--db", help="Path to the SQLite database (overrides profile selection)")
@@ -399,6 +461,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_gui = sub.add_parser("gui", help="Open the CRM window")
     p_gui.set_defaults(func=cmd_gui)
+
+    p_server_token = sub.add_parser(
+        "server-token", help="Generate a random access token for `serve`/`remote_server` config"
+    )
+    p_server_token.set_defaults(func=cmd_server_token)
+
+    p_serve = sub.add_parser(
+        "serve", help="Run the HTTP server (JSON API + mobile web UI) - see docs/SERVER_SETUP.md"
+    )
+    p_serve.add_argument("--host", help="Overrides server.host in config.yaml")
+    p_serve.add_argument("--port", type=int, help="Overrides server.port in config.yaml")
+    p_serve.add_argument("--cert", help="TLS certificate file (e.g. from win-acme) - required for real deployment")
+    p_serve.add_argument("--key", help="TLS private key file matching --cert")
+    p_serve.set_defaults(func=cmd_serve)
 
     p_profile = sub.add_parser(
         "profile", help="Manage product/company profiles - each has its own config.yaml and leads.db"
