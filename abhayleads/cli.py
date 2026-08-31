@@ -379,7 +379,7 @@ def cmd_serve(args):
         print(str(exc), file=sys.stderr)
         sys.exit(1)
 
-    host = args.host or server_config.get("host", "0.0.0.0")
+    host = args.host or server_config.get("host", "127.0.0.1")
     port = args.port or server_config.get("port", 8443)
     profile_note = f" (profile: {profile_name})" if profile_name else ""
 
@@ -389,8 +389,10 @@ def cmd_serve(args):
     else:
         print(
             f"Serving {db_path}{profile_note} on http://{host}:{port} "
-            "(NO TLS - only safe for localhost/LAN testing, never expose this to the "
-            "internet without --cert/--key; see docs/SERVER_SETUP.md)"
+            "(NO TLS - only safe for localhost/LAN testing, or for 127.0.0.1 sitting "
+            "behind a local reverse proxy like Caddy that terminates HTTPS itself. "
+            "Never bind this to 0.0.0.0 and expose it to the internet without "
+            "--cert/--key or a TLS-terminating proxy in front of it; see docs/SERVER_SETUP.md)"
         )
         uvicorn.run(app, host=host, port=port)
 

@@ -58,7 +58,13 @@ DEFAULT_CONFIG: dict[str, Any] = {
         # you set this (run `abhayleads server-token` to generate one).
         # See docs/SERVER_SETUP.md.
         "token": "",
-        "host": "0.0.0.0",
+        # 127.0.0.1 (loopback-only) by default, so `serve` is never
+        # accidentally reachable from outside this machine - the
+        # recommended deployment (a Caddy reverse proxy handling TLS)
+        # keeps it this way. Only set this to "0.0.0.0" if `serve` is
+        # terminating TLS itself via --cert/--key with nothing in front
+        # of it. See docs/SERVER_SETUP.md.
+        "host": "127.0.0.1",
         "port": 8443,
     },
     # Point THIS install at someone else's `abhayleads serve` instead of a
