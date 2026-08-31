@@ -20,6 +20,7 @@ communities your buyers hang out in.
 
 import os
 import time
+from typing import Iterator
 
 import requests
 
@@ -52,13 +53,12 @@ class RedditSource(BaseLeadSource):
         resp.raise_for_status()
         return resp.json().get("access_token")
 
-    def fetch(self, keywords: list[str]) -> list[LeadCandidate]:
+    def fetch(self, keywords: list[str]) -> Iterator[LeadCandidate]:
         subreddits = self.source_config.get("subreddits", []) or []
         if not subreddits:
-            return []
+            return
 
         token = self._get_oauth_token()
-        candidates: list[LeadCandidate] = []
         seen_ids: set[str] = set()
 
         for subreddit in subreddits:
@@ -74,22 +74,18 @@ class RedditSource(BaseLeadSource):
                     body = post.get("selftext", "")
                     permalink = f"https://www.reddit.com{post.get('permalink', '')}"
 
-                    candidates.append(
-                        LeadCandidate(
-                            source=self.name,
-                            source_detail=permalink,
-                            contact_name=post.get("author", ""),
-                            company=f"r/{subreddit}",
-                            title=title,
-                            url=permalink,
-                            raw_text=f"{title}\n{body}",
-                        )
+                    yield LeadCandidate(
+                        source=self.name,
+                        source_detail=permalink,
+                        contact_name=post.get("author", ""),
+                        company=f"r/{subreddit}",
+                        title=title,
+                        url=permalink,
+                        raw_text=f"{title}\n{body}",
                     )
 
                 # Be a polite, low-volume client either way.
                 time.sleep(2 if not token else 0.5)
-
-        return candidates
 
     def _search_one(self, subreddit: str, keyword: str, token: str | None) -> list[dict]:
         params = {"q": keyword, "restrict_sr": "1", "sort": "new", "limit": 25}

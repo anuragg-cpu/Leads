@@ -8,6 +8,8 @@ solves, or posting "Show HN" launches of adjacent tools (worth watching
 as competitors, or as partnership/backlink opportunities).
 """
 
+from typing import Iterator
+
 import requests
 
 from ..models import LeadCandidate
@@ -19,8 +21,7 @@ SEARCH_URL = "https://hn.algolia.com/api/v1/search"
 class HackerNewsSource(BaseLeadSource):
     name = "hackernews"
 
-    def fetch(self, keywords: list[str]) -> list[LeadCandidate]:
-        candidates: list[LeadCandidate] = []
+    def fetch(self, keywords: list[str]) -> Iterator[LeadCandidate]:
         seen_ids: set[str] = set()
 
         for keyword in keywords:
@@ -44,15 +45,11 @@ class HackerNewsSource(BaseLeadSource):
                 url = hit.get("url") or f"https://news.ycombinator.com/item?id={object_id}"
                 author = hit.get("author") or ""
 
-                candidates.append(
-                    LeadCandidate(
-                        source=self.name,
-                        source_detail=f"https://news.ycombinator.com/item?id={object_id}",
-                        contact_name=author,
-                        title=title,
-                        url=url,
-                        raw_text=f"{title}\n{body}",
-                    )
+                yield LeadCandidate(
+                    source=self.name,
+                    source_detail=f"https://news.ycombinator.com/item?id={object_id}",
+                    contact_name=author,
+                    title=title,
+                    url=url,
+                    raw_text=f"{title}\n{body}",
                 )
-
-        return candidates

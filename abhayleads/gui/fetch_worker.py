@@ -12,6 +12,11 @@ from ..fetcher import FetchResult, run_fetch
 
 class FetchWorker(QThread):
     progress = pyqtSignal(str)
+    #: Emitted right after each individual lead is scored and written to
+    #: the database - lets the window show leads as they're found instead
+    #: of only once the entire fetch (every source, every locality/keyword)
+    #: finishes, which for osm_places can be several minutes.
+    lead_saved = pyqtSignal()
     finished_ok = pyqtSignal(object)  # FetchResult
     finished_error = pyqtSignal(str)
 
@@ -29,6 +34,7 @@ class FetchWorker(QThread):
                 self.config,
                 only_sources=[self.only_source] if self.only_source else None,
                 progress=self.progress.emit,
+                on_lead_saved=self.lead_saved.emit,
             )
             db.close()
             self.finished_ok.emit(result)

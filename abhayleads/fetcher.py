@@ -26,11 +26,18 @@ def run_fetch(
     config: dict[str, Any],
     only_sources: Optional[list[str]] = None,
     progress: Optional[Callable[[str], None]] = None,
+    on_lead_saved: Optional[Callable[[], None]] = None,
 ) -> FetchResult:
     """Runs every enabled (or explicitly selected) source once.
 
     `progress`, if given, is called with short human-readable status
     strings - useful for a GUI to show "Searching hackernews..." etc.
+
+    `on_lead_saved`, if given, is called right after each individual
+    candidate is scored and written to the database - a source finding
+    hundreds of leads over several minutes (osm_places, walking many
+    localities) no longer means waiting for all of them before anything
+    shows up; each one lands in the db the moment it's found.
     """
     keywords = config.get("product", {}).get("keywords", []) or []
     sources = get_enabled_sources(config, only=only_sources)
@@ -50,10 +57,8 @@ def run_fetch(
         if progress:
             progress(f"Searching {source.name}...")
             source.progress_callback = progress
-        candidates, source_errors = source.safe_fetch(keywords)
-        errors.extend(source_errors)
 
-        for candidate in candidates:
+        for candidate in source.safe_fetch(keywords):
             if is_excluded(candidate, config):
                 continue
             score, matched = score_candidate(candidate, config)
@@ -63,6 +68,10 @@ def run_fetch(
                 new_count += 1
             else:
                 updated_count += 1
+            if on_lead_saved:
+                on_lead_saved()
+
+        errors.extend(source.warnings)
 
     db.finish_fetch_run(run_id, new_count, updated_count, errors)
     if progress:

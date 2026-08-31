@@ -1,7 +1,7 @@
 """Base class every lead source implements."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 
 from ..models import LeadCandidate
 
@@ -34,20 +34,30 @@ class BaseLeadSource(ABC):
         self.warnings: list[str] = []
 
     @abstractmethod
-    def fetch(self, keywords: list[str]) -> list[LeadCandidate]:
-        """Run a search for the given keywords and return raw candidates.
+    def fetch(self, keywords: list[str]) -> Iterator[LeadCandidate]:
+        """Search for the given keywords, yielding raw candidates as they're
+        found - NOT a list built up and returned at the end. This is what
+        lets the CLI/GUI save (and, in the GUI, display) each lead the
+        moment it's found instead of waiting for the whole source - all
+        localities, all keywords - to finish first.
 
-        Implementations should NOT filter/score - just return everything
+        Implementations should NOT filter/score - just yield everything
         plausibly relevant. Scoring and exclusion happen centrally so the
         logic only has to be tuned in one place.
         """
         raise NotImplementedError
+        yield  # pragma: no cover - makes this a generator function to subclass
 
-    def safe_fetch(self, keywords: list[str]) -> tuple[list[LeadCandidate], list[str]]:
-        """Wraps fetch() so one source's network hiccup doesn't kill a run."""
+    def safe_fetch(self, keywords: list[str]) -> Iterator[LeadCandidate]:
+        """Wraps fetch() so one source's network hiccup doesn't kill a run.
+
+        Yields through to fetch()'s candidates as they arrive. If fetch()
+        raises partway through, whatever was already yielded (and, by the
+        caller, already saved) is NOT lost - only the exception is recorded,
+        into self.warnings, for the caller to check once iteration ends.
+        """
         self.warnings = []
         try:
-            candidates = self.fetch(keywords)
-            return candidates, list(self.warnings)
+            yield from self.fetch(keywords)
         except Exception as exc:  # noqa: BLE001 - deliberately broad, this is a boundary
-            return [], self.warnings + [f"{self.name}: {exc}"]
+            self.warnings.append(f"{self.name}: {exc}")
