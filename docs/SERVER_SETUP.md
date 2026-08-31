@@ -131,6 +131,13 @@ hostname instead of a fixed IP:
    ```
    leads.chipiotembedded.com   CNAME   chipiot-office.duckdns.org
    ```
+   On Squarespace (Settings -> Domains -> chipiotembedded.com -> DNS
+   Settings -> Custom Records): click **Add Record**, not "Add
+   Preset" - presets are prebuilt bundles for specific known services
+   (Google Workspace, etc.), not a general-purpose custom record.
+   Type `CNAME`, Host `leads` (Squarespace appends the base domain
+   itself, so just `leads`, not the full `leads.chipiotembedded.com`),
+   Data `chipiot-office.duckdns.org`, default TTL.
    Set this once - from here on, whenever DuckDNS's record changes,
    `leads.chipiotembedded.com` automatically follows it.
 4. On the Windows Server, save this as `C:\caddy\duckdns-update.ps1`
