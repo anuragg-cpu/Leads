@@ -47,6 +47,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
         },
     },
     "follow_up": {"default_days": 3},
+    "notifications": {
+        # Empty by default - `abhayleads digest` just prints its summary
+        # and skips sending until you set this. See docs/NOTIFICATIONS.md.
+        "ntfy_topic": "",
+        "ntfy_base_url": "https://ntfy.sh",
+    },
 }
 
 

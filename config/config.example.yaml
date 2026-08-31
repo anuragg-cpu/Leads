@@ -107,3 +107,11 @@ scoring:
 
 follow_up:
   default_days: 3
+
+# Daily phone-notification digest (`abhayleads digest`) - see
+# docs/NOTIFICATIONS.md for the full setup (install the free "ntfy" app,
+# pick a topic name, subscribe to it). Leave ntfy_topic blank to keep
+# this off - `digest` still prints its summary, it just won't push.
+notifications:
+  ntfy_topic: ""
+  ntfy_base_url: "https://ntfy.sh"

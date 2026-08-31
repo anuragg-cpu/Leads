@@ -19,6 +19,7 @@ class FetchResult:
     dropped_no_keywords: int
     errors: list[str]
     sources_run: list[str]
+    stopped: bool = False
 
 
 def run_fetch(
@@ -27,6 +28,7 @@ def run_fetch(
     only_sources: Optional[list[str]] = None,
     progress: Optional[Callable[[str], None]] = None,
     on_lead_saved: Optional[Callable[[], None]] = None,
+    should_stop: Optional[Callable[[], bool]] = None,
 ) -> FetchResult:
     """Runs every enabled (or explicitly selected) source once.
 
@@ -38,6 +40,12 @@ def run_fetch(
     hundreds of leads over several minutes (osm_places, walking many
     localities) no longer means waiting for all of them before anything
     shows up; each one lands in the db the moment it's found.
+
+    `should_stop`, if given, is polled after every candidate (and before
+    starting each source) - returning True ends the run early. Whatever
+    was already saved stays saved; this only stops looking for more.
+    Cooperative, not instant: a source blocked on one in-flight network
+    request finishes that single request before the next check.
     """
     keywords = config.get("product", {}).get("keywords", []) or []
     sources = get_enabled_sources(config, only=only_sources)
@@ -46,6 +54,7 @@ def run_fetch(
     new_count = 0
     updated_count = 0
     errors: list[str] = []
+    stopped = False
 
     if not keywords:
         errors.append(
@@ -54,6 +63,10 @@ def run_fetch(
         )
 
     for source in sources:
+        if should_stop and should_stop():
+            stopped = True
+            break
+
         if progress:
             progress(f"Searching {source.name}...")
             source.progress_callback = progress
@@ -70,12 +83,18 @@ def run_fetch(
                 updated_count += 1
             if on_lead_saved:
                 on_lead_saved()
+            if should_stop and should_stop():
+                stopped = True
+                break
 
         errors.extend(source.warnings)
+        if stopped:
+            break
 
     db.finish_fetch_run(run_id, new_count, updated_count, errors)
     if progress:
-        progress(f"Done: {new_count} new, {updated_count} updated, {len(errors)} error(s).")
+        status = "Stopped" if stopped else "Done"
+        progress(f"{status}: {new_count} new, {updated_count} updated, {len(errors)} error(s).")
 
     return FetchResult(
         run_id=run_id,
@@ -84,4 +103,5 @@ def run_fetch(
         dropped_no_keywords=0,
         errors=errors,
         sources_run=[s.name for s in sources],
+        stopped=stopped,
     )

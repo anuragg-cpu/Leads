@@ -7,10 +7,14 @@ Examples:
     abhayleads list --due                  leads due for follow-up
     abhayleads show 42                     full detail for lead 42
     abhayleads update 42 --stage Contacted --notes "sent intro email" --follow-up 2026-09-03
+    abhayleads add --company "Acme" --contact-name "Jane" --phone "+91..."  add a lead by hand
     abhayleads stats                       pipeline summary
     abhayleads dedupe                      merge osm_places leads mapped twice
     abhayleads reset                       delete ALL leads and start over
+    abhayleads digest                      push a summary to your phone (docs/NOTIFICATIONS.md)
     abhayleads gui                         open the CRM window
+
+    Ctrl+C during `fetch` stops it early - leads already found stay saved.
 
     abhayleads profile list                list your product/company profiles
     abhayleads profile create "OtherCo"    new profile, own config.yaml + leads.db
@@ -20,13 +24,15 @@ Examples:
 
 import argparse
 import sys
+import uuid
 from pathlib import Path
 from typing import Optional
 
+from . import notify
 from .config import default_paths, load_config
 from .db import Database
 from .fetcher import run_fetch
-from .models import STAGES
+from .models import STAGES, LeadCandidate, utcnow_iso
 from .profiles import (
     DEFAULT_PROFILE_NAME,
     create_profile,
@@ -76,7 +82,14 @@ def _get_config(args):
 def cmd_fetch(args):
     db = _get_db(args)
     config = _get_config(args)
-    result = run_fetch(db, config, only_sources=[args.source] if args.source else None, progress=print)
+    try:
+        result = run_fetch(db, config, only_sources=[args.source] if args.source else None, progress=print)
+    except KeyboardInterrupt:
+        # Every lead is saved as it's found, not batched at the end - so
+        # whatever showed up before Ctrl+C is already safely in the db.
+        print("\nStopped - whatever was already found is saved. Run `abhayleads fetch` again to continue.")
+        db.close()
+        return
 
     print(f"\nSources run: {', '.join(result.sources_run) or '(none enabled)'}")
     print(f"New leads:     {result.new_leads}")
@@ -151,6 +164,37 @@ def cmd_update(args):
     db.close()
 
 
+def cmd_add(args):
+    db = _get_db(args)
+    company = (args.company or "").strip()
+    contact = (args.contact_name or "").strip()
+    if not company and not contact:
+        print("Provide at least --company or --contact-name.", file=sys.stderr)
+        db.close()
+        sys.exit(1)
+
+    # A random source_detail keeps every manually-added lead unique, so
+    # two you add by hand never accidentally dedupe against each other.
+    candidate = LeadCandidate(
+        source="manual",
+        source_detail=f"manual-{uuid.uuid4().hex}",
+        company=company,
+        contact_name=contact,
+        title=args.title or "",
+        email=args.email or "",
+        phone=args.phone or "",
+        url=args.url or "",
+        raw_text="Added by hand.",
+    )
+    lead_id, _ = db.upsert_candidate(candidate, score=0)
+
+    if args.stage != "New" or args.notes or args.follow_up:
+        db.update_lead(lead_id, stage=args.stage, notes=args.notes, next_follow_up=args.follow_up)
+
+    print(f"Added lead #{lead_id}.")
+    db.close()
+
+
 def cmd_stats(args):
     db = _get_db(args)
     stats = db.stats()
@@ -196,6 +240,46 @@ def cmd_reset(args):
             return
     count = db.delete_all_leads()
     print(f"Deleted {count} lead(s). config.yaml is untouched - run `abhayleads fetch` to start over.")
+    db.close()
+
+
+def cmd_digest(args):
+    """Summarizes what's changed since the last digest and pushes it to
+    your phone via ntfy (see docs/NOTIFICATIONS.md). Independent of
+    fetching - run this on its own schedule (e.g. once a day via
+    packaging/schedule_daily_digest.bat) regardless of when you actually
+    run `fetch`.
+    """
+    db = _get_db(args)
+    config = _get_config(args)
+    _, _, profile_name = _resolve_paths(args)
+
+    since = db.get_last_digest_at()
+    summary = db.summarize_since(since)
+    message = (
+        f"{summary['new_leads']} new leads, {summary['updated_leads']} updated, "
+        f"{summary['due_for_follow_up']} due for follow-up."
+    )
+    print(message)
+
+    notif_config = config.get("notifications", {})
+    topic = notif_config.get("ntfy_topic", "")
+    if not topic:
+        print("notifications.ntfy_topic isn't set - not sending a push. See docs/NOTIFICATIONS.md.")
+    else:
+        title = f"Abhay Leads - {profile_name}" if profile_name else "Abhay Leads"
+        try:
+            notify.send_ntfy(
+                topic,
+                message,
+                title=title,
+                base_url=notif_config.get("ntfy_base_url") or notify.DEFAULT_NTFY_BASE_URL,
+            )
+            print(f"Sent to ntfy topic {topic!r}.")
+        except Exception as exc:  # noqa: BLE001 - network/config failure, report and move on
+            print(f"Failed to send notification: {exc}", file=sys.stderr)
+
+    db.set_last_digest_at(utcnow_iso())
     db.close()
 
 
@@ -284,6 +368,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_update.add_argument("--phone")
     p_update.set_defaults(func=cmd_update)
 
+    p_add = sub.add_parser("add", help="Add a lead by hand (not from an automated source)")
+    p_add.add_argument("--company")
+    p_add.add_argument("--contact-name")
+    p_add.add_argument("--title")
+    p_add.add_argument("--email")
+    p_add.add_argument("--phone")
+    p_add.add_argument("--url")
+    p_add.add_argument("--stage", choices=STAGES, default="New")
+    p_add.add_argument("--notes")
+    p_add.add_argument("--follow-up", help="ISO date, e.g. 2026-09-03")
+    p_add.set_defaults(func=cmd_add)
+
     p_stats = sub.add_parser("stats", help="Pipeline summary and last fetch run")
     p_stats.set_defaults(func=cmd_stats)
 
@@ -295,6 +391,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_reset = sub.add_parser("reset", help="Delete ALL leads in the current profile to start over")
     p_reset.add_argument("--yes", action="store_true", help="Skip the confirmation prompt")
     p_reset.set_defaults(func=cmd_reset)
+
+    p_digest = sub.add_parser(
+        "digest", help="Push a summary of what's changed since the last digest to your phone via ntfy"
+    )
+    p_digest.set_defaults(func=cmd_digest)
 
     p_gui = sub.add_parser("gui", help="Open the CRM window")
     p_gui.set_defaults(func=cmd_gui)

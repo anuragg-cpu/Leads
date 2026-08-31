@@ -36,6 +36,7 @@ from ..profiles import (
     profile_paths,
     set_active_profile,
 )
+from .add_lead_dialog import AddLeadDialog
 from .config_editor_dialog import ConfigEditorDialog
 from .detail_dialog import LeadDetailDialog
 from .fetch_worker import FetchWorker
@@ -245,6 +246,12 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage(f"Deleted {count} lead(s). Run Find New Leads to start over.", 8000)
         self.refresh()
 
+    def _add_lead(self):
+        dialog = AddLeadDialog(self.db, self)
+        if dialog.exec():
+            self.status_bar.showMessage("Lead added.", 5000)
+            self.refresh()
+
     # -- toolbar -----------------------------------------------------------
 
     def _build_toolbar(self) -> QHBoxLayout:
@@ -253,6 +260,15 @@ class MainWindow(QMainWindow):
         self.fetch_button = QPushButton("Find New Leads")
         self.fetch_button.clicked.connect(self._start_fetch)
         row.addWidget(self.fetch_button)
+
+        self.stop_button = QPushButton("Stop")
+        self.stop_button.setEnabled(False)
+        self.stop_button.clicked.connect(self._stop_fetch)
+        row.addWidget(self.stop_button)
+
+        add_lead_button = QPushButton("Add Lead")
+        add_lead_button.clicked.connect(self._add_lead)
+        row.addWidget(add_lead_button)
 
         row.addWidget(QLabel("Stage:"))
         self.stage_filter = QComboBox()
@@ -287,6 +303,7 @@ class MainWindow(QMainWindow):
         config = load_config(self.config_path)
         self.fetch_button.setEnabled(False)
         self.fetch_button.setText("Searching...")
+        self.stop_button.setEnabled(True)
         self.status_bar.showMessage("Starting fetch...")
         self._last_incremental_refresh = 0.0  # don't wait out the throttle for the first one
 
@@ -296,6 +313,13 @@ class MainWindow(QMainWindow):
         self.worker.finished_ok.connect(self._fetch_done)
         self.worker.finished_error.connect(self._fetch_failed)
         self.worker.start()
+
+    def _stop_fetch(self):
+        if self.worker is not None:
+            self.worker.stop()
+            self.stop_button.setEnabled(False)
+            self.stop_button.setText("Stopping...")
+            self.status_bar.showMessage("Stopping - finishing the current request...")
 
     def _on_lead_saved(self):
         """Called after every single lead the running fetch saves. Actually
@@ -310,7 +334,10 @@ class MainWindow(QMainWindow):
     def _fetch_done(self, result):
         self.fetch_button.setEnabled(True)
         self.fetch_button.setText("Find New Leads")
-        msg = f"Fetch complete: {result.new_leads} new, {result.updated_leads} updated."
+        self.stop_button.setEnabled(False)
+        self.stop_button.setText("Stop")
+        verb = "Stopped early" if result.stopped else "Fetch complete"
+        msg = f"{verb}: {result.new_leads} new, {result.updated_leads} updated."
         if result.errors:
             msg += f" {len(result.errors)} source error(s) - see below."
         self.status_bar.showMessage(msg, 15000)
@@ -321,6 +348,8 @@ class MainWindow(QMainWindow):
     def _fetch_failed(self, error: str):
         self.fetch_button.setEnabled(True)
         self.fetch_button.setText("Find New Leads")
+        self.stop_button.setEnabled(False)
+        self.stop_button.setText("Stop")
         self.status_bar.showMessage("Fetch failed.", 10000)
         QMessageBox.critical(self, "Fetch failed", error)
 

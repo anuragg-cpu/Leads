@@ -214,3 +214,70 @@ def test_delete_all_leads_wipes_leads_history_and_runs(db):
     assert db.list_leads() == []
     assert db.stage_history(id1) == []
     assert db.last_fetch_run() is None
+
+
+def test_get_last_digest_at_defaults_to_none(db):
+    assert db.get_last_digest_at() is None
+
+
+def test_set_and_get_last_digest_at(db):
+    db.set_last_digest_at("2026-08-31T08:00:00+00:00")
+    assert db.get_last_digest_at() == "2026-08-31T08:00:00+00:00"
+
+    db.set_last_digest_at("2026-09-01T08:00:00+00:00")  # a second call updates, doesn't error
+    assert db.get_last_digest_at() == "2026-09-01T08:00:00+00:00"
+
+
+def test_summarize_since_none_counts_everything(db):
+    db.upsert_candidate(make_candidate(source_detail="a"), score=10)
+    db.upsert_candidate(make_candidate(source_detail="b"), score=20)
+
+    summary = db.summarize_since(None)
+
+    assert summary["new_leads"] == 2
+    assert summary["updated_leads"] == 0
+
+
+def test_summarize_since_a_future_cutoff_excludes_leads_created_now(db):
+    db.upsert_candidate(make_candidate(source_detail="a"), score=10)
+
+    summary = db.summarize_since("2099-01-01T00:00:00+00:00")
+
+    assert summary["new_leads"] == 0
+
+
+def test_summarize_since_a_past_cutoff_includes_leads_created_now(db):
+    db.upsert_candidate(make_candidate(source_detail="a"), score=10)
+
+    summary = db.summarize_since("2000-01-01T00:00:00+00:00")
+
+    assert summary["new_leads"] == 1
+
+
+def test_summarize_since_does_not_double_count_a_lead_in_the_same_second_as_the_cutoff(db):
+    # Regression test: timestamps only have second precision, and `since`
+    # is normally exactly what the previous digest stamped right after
+    # counting a lead as new. If a lead's created_at lands in that same
+    # second, it must not be reported as new again on the next digest.
+    lead_id, _ = db.upsert_candidate(make_candidate(source_detail="a"), score=10)
+    created_at = db.get_lead(lead_id)["created_at"]
+
+    summary = db.summarize_since(created_at)  # same instant as the lead's own creation
+
+    assert summary["new_leads"] == 0
+
+
+def test_summarize_since_counts_a_lead_updated_after_the_cutoff(db, monkeypatch):
+    lead_id, _ = db.upsert_candidate(make_candidate(source_detail="a"), score=10)
+    since = db.get_lead(lead_id)["created_at"]
+
+    # Force a distinct, later updated_at - real usage always has this
+    # naturally, but a fast test could otherwise land in the same second
+    # as `since` and make this assertion timing-dependent.
+    monkeypatch.setattr("abhayleads.db.utcnow_iso", lambda: "2099-01-01T00:00:00+00:00")
+    db.update_lead(lead_id, notes="called them")
+
+    summary = db.summarize_since(since)
+
+    assert summary["new_leads"] == 0
+    assert summary["updated_leads"] == 1
