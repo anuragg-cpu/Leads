@@ -40,6 +40,22 @@ from .detail_dialog import LeadDetailDialog
 from .fetch_worker import FetchWorker
 
 COLUMNS = ["ID", "Score", "Stage", "Company", "Contact", "Title", "Source", "Follow-up", "Last seen"]
+NUMERIC_COLUMNS = {0, 1}  # ID, Score - sort by value, not alphabetically ("10" < "9")
+
+
+class NumericTableWidgetItem(QTableWidgetItem):
+    """Sorts by the numeric value it was constructed with, not its display
+    text - otherwise clicking the ID/Score column header would sort
+    "10" before "9" (string order) instead of after (number order)."""
+
+    def __init__(self, text: str, value: float):
+        super().__init__(text)
+        self.value = value
+
+    def __lt__(self, other):
+        if isinstance(other, NumericTableWidgetItem):
+            return self.value < other.value
+        return super().__lt__(other)
 
 
 class MainWindow(QMainWindow):
@@ -65,6 +81,8 @@ class MainWindow(QMainWindow):
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
+        self.table.setSortingEnabled(True)  # click a column header to sort by it
+        self.table.sortItems(1, Qt.SortOrder.DescendingOrder)  # default: best score first
         self.table.doubleClicked.connect(self._open_selected_lead)
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self._show_table_context_menu)
@@ -231,17 +249,14 @@ class MainWindow(QMainWindow):
         row.addWidget(QLabel("Stage:"))
         self.stage_filter = QComboBox()
         self.stage_filter.addItems(["All"] + STAGES)
-        self.stage_filter.currentIndexChanged.connect(self.refresh)
         row.addWidget(self.stage_filter)
 
         row.addWidget(QLabel("Min score:"))
         self.min_score = QSpinBox()
         self.min_score.setRange(0, 100)
-        self.min_score.valueChanged.connect(self.refresh)
         row.addWidget(self.min_score)
 
         self.due_only = QCheckBox("Due for follow-up only")
-        self.due_only.stateChanged.connect(self.refresh)
         row.addWidget(self.due_only)
 
         self.search_box = QLineEdit()
@@ -249,9 +264,12 @@ class MainWindow(QMainWindow):
         self.search_box.returnPressed.connect(self.refresh)
         row.addWidget(self.search_box, stretch=1)
 
-        refresh_button = QPushButton("Refresh")
-        refresh_button.clicked.connect(self.refresh)
-        row.addWidget(refresh_button)
+        # Filters above only take effect when this is clicked (or Enter is
+        # pressed in the search box) - not live on every keystroke/change,
+        # so adjusting several filters at once doesn't re-query repeatedly.
+        search_button = QPushButton("Search")
+        search_button.clicked.connect(self.refresh)
+        row.addWidget(search_button)
 
         return row
 
@@ -297,23 +315,29 @@ class MainWindow(QMainWindow):
             search=self.search_box.text() or None,
         )
 
+        # Sorting must be off while repopulating - otherwise Qt re-sorts
+        # the table after every single setItem() call, which reorders rows
+        # out from under this row_idx-based loop. The header keeps its
+        # sort indicator regardless, so re-enabling after reapplies it.
+        self.table.setSortingEnabled(False)
         self.table.setRowCount(len(leads))
         for row_idx, lead in enumerate(leads):
             values = [
-                str(lead["id"]),
-                str(lead["score"]),
-                lead["stage"],
-                lead["company"],
-                lead["contact_name"],
-                lead["title"],
-                lead["source"],
-                lead["next_follow_up"] or "",
-                lead["last_seen_at"][:10],
+                (str(lead["id"]), lead["id"]),
+                (str(lead["score"]), lead["score"]),
+                (lead["stage"], None),
+                (lead["company"], None),
+                (lead["contact_name"], None),
+                (lead["title"], None),
+                (lead["source"], None),
+                (lead["next_follow_up"] or "", None),
+                (lead["last_seen_at"][:10], None),
             ]
-            for col_idx, value in enumerate(values):
-                item = QTableWidgetItem(value)
+            for col_idx, (text, numeric_value) in enumerate(values):
+                item = NumericTableWidgetItem(text, numeric_value) if col_idx in NUMERIC_COLUMNS else QTableWidgetItem(text)
                 item.setData(Qt.ItemDataRole.UserRole, lead["id"])
                 self.table.setItem(row_idx, col_idx, item)
+        self.table.setSortingEnabled(True)
 
         stats = self.db.stats()
         self.status_bar.showMessage(

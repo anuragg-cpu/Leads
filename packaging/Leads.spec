@@ -15,7 +15,7 @@ block_cipher = None
 project_root = Path(SPECPATH).resolve().parent
 
 a = Analysis(
-    [str(project_root / "abhayleads" / "__main__.py")],
+    [str(project_root / "launcher.py")],
     pathex=[str(project_root)],
     binaries=[],
     datas=[
