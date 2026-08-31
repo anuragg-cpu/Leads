@@ -9,6 +9,7 @@ that area right now.
 """
 
 import os
+from typing import Iterator
 
 import requests
 
@@ -21,7 +22,7 @@ SEARCH_URL = "https://api.github.com/search/repositories"
 class GitHubSource(BaseLeadSource):
     name = "github"
 
-    def fetch(self, keywords: list[str]) -> list[LeadCandidate]:
+    def fetch(self, keywords: list[str]) -> Iterator[LeadCandidate]:
         token = os.environ.get(self.source_config.get("token_env_var", "GITHUB_TOKEN"), "")
         headers = {
             "User-Agent": USER_AGENT,
@@ -30,7 +31,6 @@ class GitHubSource(BaseLeadSource):
         if token:
             headers["Authorization"] = f"Bearer {token}"
 
-        candidates: list[LeadCandidate] = []
         seen_repos: set[str] = set()
 
         for keyword in keywords:
@@ -52,16 +52,12 @@ class GitHubSource(BaseLeadSource):
                 owner = repo.get("owner", {}).get("login", "")
                 description = repo.get("description") or ""
 
-                candidates.append(
-                    LeadCandidate(
-                        source=self.name,
-                        source_detail=repo.get("html_url", full_name),
-                        company=full_name,
-                        contact_name=owner,
-                        title=full_name,
-                        url=repo.get("html_url", ""),
-                        raw_text=description,
-                    )
+                yield LeadCandidate(
+                    source=self.name,
+                    source_detail=repo.get("html_url", full_name),
+                    company=full_name,
+                    contact_name=owner,
+                    title=full_name,
+                    url=repo.get("html_url", ""),
+                    raw_text=description,
                 )
-
-        return candidates

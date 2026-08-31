@@ -15,6 +15,7 @@ match to silently stop scoring:
   skews toward US news even for a clearly non-US product.
 """
 
+from typing import Iterator
 from urllib.parse import quote_plus
 
 import feedparser
@@ -31,11 +32,10 @@ DEFAULT_EDITION = {"hl": "en-US", "gl": "US", "ceid": "US:en"}
 class GoogleNewsSource(BaseLeadSource):
     name = "google_news"
 
-    def fetch(self, keywords: list[str]) -> list[LeadCandidate]:
+    def fetch(self, keywords: list[str]) -> Iterator[LeadCandidate]:
         query_suffix = (self.source_config.get("query_suffix") or "").strip()
         edition = {**DEFAULT_EDITION, **(self.source_config.get("edition") or {})}
 
-        candidates: list[LeadCandidate] = []
         seen_links: set[str] = set()
 
         for keyword in keywords:
@@ -60,15 +60,11 @@ class GoogleNewsSource(BaseLeadSource):
                 summary = entry.get("summary", "")
                 source_name = entry.get("source", {}).get("title", "") if hasattr(entry, "get") else ""
 
-                candidates.append(
-                    LeadCandidate(
-                        source=self.name,
-                        source_detail=link,
-                        company=source_name,
-                        title=title,
-                        url=link,
-                        raw_text=f"{title}\n{summary}",
-                    )
+                yield LeadCandidate(
+                    source=self.name,
+                    source_detail=link,
+                    company=source_name,
+                    title=title,
+                    url=link,
+                    raw_text=f"{title}\n{summary}",
                 )
-
-        return candidates

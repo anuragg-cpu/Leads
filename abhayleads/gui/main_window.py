@@ -1,5 +1,6 @@
 """Main CRM window."""
 
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -42,6 +43,12 @@ from .fetch_worker import FetchWorker
 COLUMNS = ["ID", "Score", "Stage", "Company", "Contact", "Title", "Source", "Follow-up", "Last seen"]
 NUMERIC_COLUMNS = {0, 1}  # ID, Score - sort by value, not alphabetically ("10" < "9")
 
+# While a fetch is running, the table re-queries and redraws at most this
+# often - leads still show up within a couple seconds of being found
+# without rebuilding the whole table on every single one (a fetch can
+# save hundreds of leads a minute once it's going).
+INCREMENTAL_REFRESH_INTERVAL_SECONDS = 1.5
+
 
 class NumericTableWidgetItem(QTableWidgetItem):
     """Sorts by the numeric value it was constructed with, not its display
@@ -66,6 +73,7 @@ class MainWindow(QMainWindow):
         self.profile_name = profile_name
         self.db = Database(db_path)
         self.worker: Optional[FetchWorker] = None
+        self._last_incremental_refresh = 0.0
 
         self.resize(1100, 650)
         self._update_window_title()
@@ -280,12 +288,24 @@ class MainWindow(QMainWindow):
         self.fetch_button.setEnabled(False)
         self.fetch_button.setText("Searching...")
         self.status_bar.showMessage("Starting fetch...")
+        self._last_incremental_refresh = 0.0  # don't wait out the throttle for the first one
 
         self.worker = FetchWorker(self.db_path, config)
         self.worker.progress.connect(self.status_bar.showMessage)
+        self.worker.lead_saved.connect(self._on_lead_saved)
         self.worker.finished_ok.connect(self._fetch_done)
         self.worker.finished_error.connect(self._fetch_failed)
         self.worker.start()
+
+    def _on_lead_saved(self):
+        """Called after every single lead the running fetch saves. Actually
+        re-querying and redrawing the table that often would itself be
+        slow, so this just throttles how often refresh() runs - see
+        INCREMENTAL_REFRESH_INTERVAL_SECONDS."""
+        now = time.monotonic()
+        if now - self._last_incremental_refresh >= INCREMENTAL_REFRESH_INTERVAL_SECONDS:
+            self._last_incremental_refresh = now
+            self.refresh()
 
     def _fetch_done(self, result):
         self.fetch_button.setEnabled(True)
@@ -296,7 +316,7 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage(msg, 15000)
         if result.errors:
             QMessageBox.warning(self, "Some sources had errors", "\n".join(result.errors))
-        self.refresh()
+        self.refresh()  # final refresh always runs, regardless of throttle timing
 
     def _fetch_failed(self, error: str):
         self.fetch_button.setEnabled(True)

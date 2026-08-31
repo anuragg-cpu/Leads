@@ -24,7 +24,7 @@ def _capture_urls(monkeypatch):
 
 def test_fetch_defaults_to_us_edition_with_no_suffix(monkeypatch):
     captured = _capture_urls(monkeypatch)
-    GoogleNewsSource({}).fetch(["panic button system"])
+    list(GoogleNewsSource({}).fetch(["panic button system"]))  # fetch() is a generator - must be consumed
 
     assert len(captured) == 1
     url = captured[0]
@@ -42,7 +42,7 @@ def test_fetch_applies_configured_query_suffix_and_edition(monkeypatch):
             "edition": {"hl": "en-IN", "gl": "IN", "ceid": "IN:en"},
         }
     )
-    source.fetch(["panic button system"])
+    list(source.fetch(["panic button system"]))
 
     url = captured[0]
     assert "hl=en-IN" in url
@@ -62,6 +62,6 @@ def test_query_suffix_does_not_touch_the_keyword_itself(monkeypatch):
     monkeypatch.setattr("abhayleads.sources.google_news.requests.get", fake_get)
 
     keywords = ["panic button system"]
-    GoogleNewsSource({"query_suffix": "India"}).fetch(keywords)
+    list(GoogleNewsSource({"query_suffix": "India"}).fetch(keywords))
 
     assert keywords == ["panic button system"]

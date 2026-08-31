@@ -52,7 +52,7 @@ def test_element_to_candidate_skips_unnamed_places():
 
 def test_fetch_returns_empty_without_target_locations():
     source = OSMPlacesSource({"target_locations": []})
-    assert source.fetch(keywords=[]) == []
+    assert list(source.fetch(keywords=[])) == []  # fetch() is a generator - must be consumed
 
 
 def test_fetch_keeps_results_from_other_localities_when_one_fails(tmp_path, monkeypatch):
@@ -78,7 +78,7 @@ def test_fetch_keeps_results_from_other_localities_when_one_fails(tmp_path, monk
 
     monkeypatch.setattr(source, "_query_overpass", fake_query_overpass)
 
-    candidates = source.fetch(keywords=[])
+    candidates = list(source.fetch(keywords=[]))
 
     assert len(candidates) == 1
     assert candidates[0].company == "Test Hospital"
@@ -108,7 +108,7 @@ def test_fetch_collapses_exact_same_name_within_one_locality(tmp_path, monkeypat
         ],
     )
 
-    candidates = source.fetch(keywords=[])
+    candidates = list(source.fetch(keywords=[]))
 
     names = sorted(c.company for c in candidates)
     assert names == ["Prakrtii CHS F Block", "Prakrtii CHS G Block"]

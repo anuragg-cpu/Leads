@@ -30,7 +30,7 @@ https://overpass-turbo.eu/ as a one-off).
 import json
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Iterator, Optional
 
 import requests
 
@@ -87,11 +87,11 @@ def _save_geocode_cache(cache_path: Path, cache: dict[str, dict[str, float]]):
 class OSMPlacesSource(BaseLeadSource):
     name = "osm_places"
 
-    def fetch(self, keywords: list[str]) -> list[LeadCandidate]:
+    def fetch(self, keywords: list[str]) -> Iterator[LeadCandidate]:
         # Location/category driven, not free-text search - keywords unused.
         localities = self.source_config.get("target_locations", []) or []
         if not localities:
-            return []
+            return
 
         categories = self.source_config.get("categories") or list(CATEGORY_FILTERS)
         radius = self.source_config.get("radius_meters", 3000)
@@ -101,7 +101,6 @@ class OSMPlacesSource(BaseLeadSource):
         cache_path = app_data_dir / GEOCODE_CACHE_FILENAME
         cache = _load_geocode_cache(cache_path)
 
-        candidates: list[LeadCandidate] = []
         seen_urls: set[str] = set()
         localities = localities[:max_localities]
         total = len(localities)
@@ -134,6 +133,7 @@ class OSMPlacesSource(BaseLeadSource):
             # are kept as separate leads since they're genuinely different
             # named entities that may need separate outreach.
             seen_names_this_locality: set[str] = set()
+            found_this_locality = 0
             for element, label in elements:
                 candidate = self._element_to_candidate(element, locality, label)
                 if candidate is None or candidate.source_detail in seen_urls:
@@ -143,10 +143,13 @@ class OSMPlacesSource(BaseLeadSource):
                     continue
                 seen_names_this_locality.add(name_key)
                 seen_urls.add(candidate.source_detail)
-                candidates.append(candidate)
-            time.sleep(1)
+                found_this_locality += 1
+                yield candidate
 
-        return candidates
+            self.progress_callback(
+                f"osm_places: {locality} ({i}/{total}) - found {found_this_locality}, saved"
+            )
+            time.sleep(1)
 
     def _geocode(self, locality: str) -> Optional[dict[str, float]]:
         resp = requests.get(

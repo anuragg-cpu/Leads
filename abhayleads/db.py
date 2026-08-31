@@ -72,6 +72,11 @@ class Database:
         self.conn = sqlite3.connect(str(self.db_path))
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA foreign_keys = ON")
+        # WAL lets one connection write while another reads without either
+        # blocking/erroring - needed now that a fetch (writing, on a
+        # background thread) and the GUI's own periodic refresh (reading,
+        # on the main thread) run against the same file at the same time.
+        self.conn.execute("PRAGMA journal_mode = WAL")
         self.conn.executescript(SCHEMA)
         self.conn.commit()
 
