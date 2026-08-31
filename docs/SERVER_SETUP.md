@@ -98,14 +98,63 @@ internet):
 leads.chipiotembedded.com   A   <your office's public IP>
 ```
 (A subdomain, not the bare domain, so this doesn't collide with
-anything already running on `www.chipiotembedded.com`.) If your office
-internet's public IP isn't static, ask your ISP whether it is, or use a
-dynamic-DNS service that updates this record automatically when it
-changes - otherwise this breaks whenever your IP does.
+anything already running on `www.chipiotembedded.com`.)
 
 DNS changes can take a few minutes to a few hours to propagate. You can
 check with `nslookup leads.chipiotembedded.com` from any machine once
 you're ready to test.
+
+### If your office's public IP isn't static
+
+Most office/business internet connections change IP occasionally (a
+router reboot, an ISP-side change) - if that happens, the plain A
+record above goes stale and `leads.chipiotembedded.com` stops
+resolving to your server until you notice and fix it by hand. Check
+first: visit https://whatismyip.com now and again in a day or two - if
+it's identical, ask your ISP whether your IP is static/"sticky" (many
+business plans are, sometimes for a small fee); if so, skip this
+section entirely and use the plain A record above.
+
+If it does change, use [DuckDNS](https://www.duckdns.org) (free, no
+account beyond signing in with GitHub/Google, no periodic
+manual reconfirmation) to keep a hostname pointed at your current IP
+automatically, then point `leads.chipiotembedded.com` at *that*
+hostname instead of a fixed IP:
+
+1. Go to https://www.duckdns.org and sign in (GitHub/Google/etc).
+2. Under "domains", type a subdomain you want (e.g. `chipiot-office`)
+   and click **add domain** - you get `chipiot-office.duckdns.org`.
+   Copy the **token** shown at the top of the page (a UUID) - this
+   authenticates updates as coming from you.
+3. In `chipiotembedded.com`'s DNS settings, add a **CNAME** instead of
+   the A record above:
+   ```
+   leads.chipiotembedded.com   CNAME   chipiot-office.duckdns.org
+   ```
+   Set this once - from here on, whenever DuckDNS's record changes,
+   `leads.chipiotembedded.com` automatically follows it.
+4. On the Windows Server, save this as `C:\caddy\duckdns-update.ps1`
+   (swap in your own subdomain and token from step 2):
+   ```powershell
+   Invoke-RestMethod -Uri "https://www.duckdns.org/update?domains=chipiot-office&token=YOUR-TOKEN-HERE&ip="
+   ```
+   Leaving `ip=` empty is deliberate - DuckDNS reads the public IP the
+   request itself arrived from, which is exactly the address you want
+   published, so there's nothing to detect or fill in yourself.
+5. Run it once by hand to confirm it works:
+   ```
+   powershell -ExecutionPolicy Bypass -File C:\caddy\duckdns-update.ps1
+   ```
+   It should print `OK`. Check https://www.duckdns.org - your
+   domain's current IP should now be filled in.
+6. Register it to run every 5 minutes so it keeps up automatically:
+   ```
+   schtasks /create /tn "DuckDNS Update" /tr "powershell.exe -ExecutionPolicy Bypass -File C:\caddy\duckdns-update.ps1" /sc minute /mo 5 /ru SYSTEM
+   ```
+
+Verify with `nslookup chipiot-office.duckdns.org` and `nslookup
+leads.chipiotembedded.com` - both should resolve to your current
+public IP.
 
 ## 4. Forward ports 80 and 443 on your router
 
