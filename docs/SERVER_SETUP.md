@@ -27,25 +27,32 @@ anything doesn't match what's described here.
   is off, as long as the Windows Server itself is on - a real always-on
   deployment, not a tunnel or a temporary link.
 
-## Two ways to get HTTPS - pick one
+## Three ways to get HTTPS - pick one
 
 Browsers refuse to send the login cookie over plain HTTP (it's marked
 "Secure"), so a real certificate for `leads.chipiotembedded.com` is
-required either way. Two ways to get there:
+required either way. Three ways to get there:
 
-- **Path A - Caddy reverse proxy (recommended).**
-  [Caddy](https://caddyserver.com) is a free web server that gets and
-  renews your certificate automatically, forever, with no manual steps
-  after initial setup - no PFX conversion, no remembering to update a
-  service's arguments when a cert renews. `abhayleads serve` itself
-  never touches TLS or the internet directly; it only listens on
-  `127.0.0.1`, and Caddy sits in front of it on port 443. This is the
-  path below.
+- **Path A - Caddy reverse proxy (recommended if you have router
+  access).** [Caddy](https://caddyserver.com) is a free web server that
+  gets and renews your certificate automatically, forever, with no
+  manual steps after initial setup - no PFX conversion, no remembering
+  to update a service's arguments when a cert renews. `abhayleads
+  serve` itself never touches TLS or the internet directly; it only
+  listens on `127.0.0.1`, and Caddy sits in front of it on port 443.
+  Needs ports 80/443 forwarded on your router. This is the path below.
 - **Path B - win-acme, no reverse proxy.** `abhayleads serve` terminates
   TLS itself using a certificate you generate with win-acme and renew
   by hand (or via win-acme's own scheduled task) every ~60-90 days. One
-  fewer moving part to install, more manual upkeep. Covered at the
-  bottom of this doc if you'd rather avoid running a second process.
+  fewer moving part to install, more manual upkeep. Also needs router
+  port forwarding. Covered further down this doc.
+- **Path C - Cloudflare Tunnel (no router/ISP access needed).** If you
+  can't get into your router or get your ISP to forward ports (some
+  ISP-supplied boxes are locked down with no local admin access at
+  all), this path needs neither - a small program on the server makes
+  an outbound-only connection to Cloudflare, which relays your site
+  through it. No open ports, no router changes. Covered at the very
+  bottom of this doc.
 
 ## Prerequisites
 
@@ -372,3 +379,86 @@ plus 80 temporarily below), then:
 
 Steps 8-9 (pointing your desktop app at the server, using it from your
 iPhone) are identical either way.
+
+---
+
+## Path C - Cloudflare Tunnel (no router/ISP access needed)
+
+If you can't get into your router's admin page and can't get your ISP
+to forward ports either (some ISP-supplied boxes are locked down with
+no local admin panel at all, managed only by the ISP remotely), this
+path skips port forwarding entirely. Instead of your server accepting
+inbound internet connections, a small program (`cloudflared`) makes an
+*outbound* connection to Cloudflare, which relays public traffic back
+through that tunnel - no open ports, no router changes, no ISP call.
+Cloudflare also issues and renews the HTTPS certificate automatically,
+so this replaces Caddy too.
+
+This only delegates the `leads` subdomain to Cloudflare - your existing
+`www.chipiotembedded.com` site and any email on that domain stay
+entirely on Squarespace, untouched.
+
+Do steps 0-2 above (get the code, install, generate/set the token -
+`server.host` stays `127.0.0.1` same as the Caddy path, since
+`cloudflared` connects to it locally same as Caddy would have), then:
+
+1. Sign up free at https://dash.cloudflare.com/sign-up.
+2. In the Cloudflare dashboard, **Add a Site** and type the full
+   subdomain `leads.chipiotembedded.com` (not just the bare domain).
+   Pick the Free plan. Cloudflare shows two nameservers, e.g.
+   `bob.ns.cloudflare.com` / `kate.ns.cloudflare.com` (yours will
+   differ) - note them.
+3. In Squarespace (Settings -> Domains -> chipiotembedded.com -> DNS
+   Settings -> Custom Records), add two **NS** records delegating just
+   this subdomain: Host `leads`, Data = each Cloudflare nameserver from
+   step 2 (one record per nameserver). If you already added a CNAME
+   for `leads` pointing at a DuckDNS hostname earlier, remove it first
+   - it would conflict with this delegation, and you no longer need
+   DuckDNS at all with this path (Cloudflare Tunnel doesn't care what
+   your public IP is, or whether it changes).
+4. Back in Cloudflare, click **Check nameservers** on that site - once
+   it shows "Active" (can take a few minutes to a few hours), continue.
+5. On the server, download `cloudflared-windows-amd64.exe` from
+   https://github.com/cloudflare/cloudflared/releases/latest, rename it
+   to `cloudflared.exe`, put it in `C:\cloudflared\`.
+6. Authenticate and create a tunnel:
+   ```
+   cd C:\cloudflared
+   cloudflared.exe tunnel login
+   ```
+   Opens a browser to authorize against your Cloudflare account - pick
+   the `leads.chipiotembedded.com` zone when prompted.
+   ```
+   cloudflared.exe tunnel create abhayleads
+   ```
+   Note the tunnel ID and the credentials file path it prints (looks
+   like `C:\Users\<you>\.cloudflared\<tunnel-id>.json`).
+7. Route the subdomain to this tunnel:
+   ```
+   cloudflared.exe tunnel route dns abhayleads leads.chipiotembedded.com
+   ```
+8. Create `C:\cloudflared\config.yml`:
+   ```yaml
+   tunnel: abhayleads
+   credentials-file: C:\Users\<you>\.cloudflared\<tunnel-id>.json
+   ingress:
+     - hostname: leads.chipiotembedded.com
+       service: http://127.0.0.1:8443
+     - service: http_status:404
+   ```
+   (swap in the real credentials-file path from step 6)
+9. Test it - in one terminal: `cloudflared.exe tunnel run abhayleads`;
+   in another: `venv\Scripts\python -m abhayleads serve` (no
+   `--cert`/`--key` needed - Cloudflare handles HTTPS at their edge,
+   same reasoning as the Caddy path). Visit
+   `https://leads.chipiotembedded.com` from your phone.
+10. Make both permanent:
+    ```
+    cloudflared.exe service install
+    ```
+    installs `cloudflared` itself as a Windows service using
+    `config.yml`. For `abhayleads serve`, use `nssm.exe install
+    AbhayLeadsServer` exactly as in step 7 of the Caddy path above.
+
+Steps 8-9 from the top of this doc (pointing your desktop app at the
+server, using it from your iPhone) are identical either way.
