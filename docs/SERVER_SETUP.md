@@ -507,9 +507,21 @@ Caddy path, since Tailscale connects to it locally), then:
 4. Enable HTTPS certificates for your tailnet - in the admin console,
    go to DNS settings (https://login.tailscale.com/admin/dns) and turn
    on **HTTPS Certificates**. Required before Funnel will work.
-5. Check Funnel is available for your account - the admin console will
-   show a prompt/link to enable it under Access Controls if it isn't
-   on by default; follow that prompt if you see it.
+5. Enable Funnel via Access Controls
+   (https://login.tailscale.com/admin/acls). This isn't a toggle -
+   it's a policy file. If your policy uses the newer `"grants"` format
+   (Tailscale's current default for new accounts), add a `"nodeAttrs"`
+   block as a sibling of `"grants"`, not nested inside it:
+   ```json
+   "nodeAttrs": [
+     {
+       "target": ["autogroup:member"],
+       "attr":   ["funnel"],
+     },
+   ],
+   ```
+   Save. If your policy already has other content in `"nodeAttrs"`,
+   add this as one more entry in that array instead of replacing it.
 6. Test it - in one terminal, run the app:
    ```
    venv\Scripts\python -m abhayleads serve
@@ -552,3 +564,42 @@ remote_server:
 **Use it from your iPhone** - open `https://server.tailxxxx.ts.net` in
 Safari, log in with the token, same full read/write experience as
 every other path in this doc.
+
+### Troubleshooting NSSM: "Unexpected status SERVICE_PAUSED"
+
+If `nssm start AbhayLeadsServer` prints this, the service isn't really
+running - the wrapped `abhayleads serve` process crashed almost
+immediately after NSSM launched it, and NSSM's crash-loop protection
+paused the service rather than endlessly restarting it. To see the
+actual error:
+```
+nssm set AbhayLeadsServer AppStdout C:\AbhayLeads\service-stdout.log
+nssm set AbhayLeadsServer AppStderr C:\AbhayLeads\service-stderr.log
+nssm restart AbhayLeadsServer
+type C:\AbhayLeads\service-stderr.log
+```
+Also double check what NSSM actually saved for the three key fields
+(a typo in the install dialog is the most common cause):
+```
+nssm get AbhayLeadsServer Application
+nssm get AbhayLeadsServer AppParameters
+nssm get AbhayLeadsServer AppDirectory
+```
+These should read exactly `<repo>\venv\Scripts\python.exe`,
+`-m abhayleads serve`, and `<repo>` (e.g. `C:\AbhayLeads`).
+`nssm status AbhayLeadsServer` gives the current real state at any
+time if the start/restart output is ambiguous.
+
+### Troubleshooting the client: "Server rejected the access token"
+
+If a client machine's `abhayleads` commands (once `remote_server` is
+configured) fail with `RemoteDatabaseError: Server rejected the
+access token - check server.token matches on both ends`, the
+connection itself is working (it reached the server and got a real
+HTTP response) - `server.token` in the server's config.yaml and
+`remote_server.token` in the client's config.yaml just don't match
+character-for-character. Easiest fix: regenerate a fresh token with
+`abhayleads server-token`, then paste that exact same value into both
+files in one sitting (rather than hunting for a typo in what's
+already there), and restart the `AbhayLeadsServer` service so it picks
+up the change.
