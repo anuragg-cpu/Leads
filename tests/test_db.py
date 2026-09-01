@@ -1,4 +1,5 @@
 import tempfile
+import threading
 from pathlib import Path
 
 import pytest
@@ -281,3 +282,51 @@ def test_summarize_since_counts_a_lead_updated_after_the_cutoff(db, monkeypatch)
 
     assert summary["new_leads"] == 0
     assert summary["updated_leads"] == 1
+
+
+def test_connection_usable_across_threads():
+    # Regression test: `abhayleads serve` opens one Database per HTTP
+    # request via a sync FastAPI dependency. The thread pool FastAPI runs
+    # sync dependencies on doesn't guarantee the same worker thread
+    # handles both the "before yield" (open) and "after yield" (close)
+    # halves of a request - without check_same_thread=False in
+    # Database.__init__, that mismatch raised "SQLite objects created in
+    # a thread can only be used in that same thread" under real
+    # concurrent load, live-tested against a running `abhayleads serve`.
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = Path(tmp) / "test.db"
+        holder: dict = {}
+        opened = threading.Event()
+        # Keeps thread A alive (and thus its native thread id un-recycled)
+        # until thread B is done - joining thread A before starting thread
+        # B would let the OS/interpreter hand thread B the very same
+        # thread id thread A just freed up, making this pass even without
+        # the fix (found the hard way: the first version of this test did
+        # exactly that and passed regardless of check_same_thread).
+        thread_b_done = threading.Event()
+
+        def open_on_thread_a():
+            holder["db"] = Database(db_path)
+            opened.set()
+            thread_b_done.wait(timeout=5)
+
+        def use_and_close_on_thread_b():
+            opened.wait(timeout=5)
+            try:
+                holder["db"].upsert_candidate(make_candidate(source_detail="thread-b"), score=10)
+                holder["db"].stats()
+                holder["db"].close()
+            except Exception as exc:  # noqa: BLE001 - re-raised on the main thread below
+                holder["error"] = exc
+            finally:
+                thread_b_done.set()
+
+        t1 = threading.Thread(target=open_on_thread_a)
+        t2 = threading.Thread(target=use_and_close_on_thread_b)
+        t1.start()
+        t2.start()
+        t1.join(timeout=5)
+        t2.join(timeout=5)
+
+        if "error" in holder:
+            raise holder["error"]
