@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from abhayleads.server.app import create_app
 
 TOKEN = "test-token-123"
+PUBLIC_TOKEN = "public-intake-token-456"
 
 
 @pytest.fixture
@@ -17,6 +18,14 @@ def client():
     with tempfile.TemporaryDirectory() as tmp:
         db_path = Path(tmp) / "test.db"
         app = create_app(db_path, {"server": {"token": TOKEN}})
+        yield TestClient(app)
+
+
+@pytest.fixture
+def public_intake_client():
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = Path(tmp) / "test.db"
+        app = create_app(db_path, {"server": {"token": TOKEN, "public_intake_token": PUBLIC_TOKEN}})
         yield TestClient(app)
 
 
@@ -230,3 +239,87 @@ def test_web_tools_reset_requires_typed_delete(client):
 
     client.post("/tools/reset", data={"confirm": "DELETE"})
     assert "0 total" in client.get("/").text
+
+
+def test_public_intake_not_mounted_when_no_token_configured(client):
+    resp = client.post("/public/intake/anything", json={"name": "Someone"})
+    assert resp.status_code == 404
+
+
+def test_public_intake_wrong_token_is_404(public_intake_client):
+    resp = public_intake_client.post("/public/intake/wrong-token", json={"name": "Someone"})
+    assert resp.status_code == 404
+
+
+def test_public_intake_creates_a_lead(public_intake_client):
+    resp = public_intake_client.post(
+        f"/public/intake/{PUBLIC_TOKEN}",
+        json={
+            "name": "Jane Doe",
+            "company": "Acme Society",
+            "phone": "9999999999",
+            "message": "Interested in pricing",
+            "segment": "Housing society",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"ok": True}
+
+    resp = public_intake_client.get("/api/leads", headers=auth_headers())
+    leads = resp.json()
+    assert len(leads) == 1
+    lead = leads[0]
+    assert lead["source"] == "website_form"
+    assert lead["company"] == "Acme Society"
+    assert lead["contact_name"] == "Jane Doe"
+    assert lead["phone"] == "9999999999"
+    assert "Interested in pricing" in lead["raw_text"]
+    assert "Housing society" in lead["raw_text"]
+
+
+def test_public_intake_requires_name_or_company(public_intake_client):
+    resp = public_intake_client.post(
+        f"/public/intake/{PUBLIC_TOKEN}", json={"message": "hi", "phone": "123"}
+    )
+    assert resp.status_code == 400
+
+    resp = public_intake_client.get("/api/leads", headers=auth_headers())
+    assert resp.json() == []
+
+
+def test_public_intake_honeypot_silently_no_ops(public_intake_client):
+    resp = public_intake_client.post(
+        f"/public/intake/{PUBLIC_TOKEN}",
+        json={"name": "Bot", "company": "Spamco", "website": "http://filled-in-by-a-bot.example"},
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"ok": True}  # looks like success to the bot...
+
+    resp = public_intake_client.get("/api/leads", headers=auth_headers())
+    assert resp.json() == []  # ...but nothing was actually saved
+
+
+def test_public_intake_rate_limited_per_ip(public_intake_client):
+    from abhayleads.server.app import PUBLIC_INTAKE_RATE_LIMIT
+
+    for i in range(PUBLIC_INTAKE_RATE_LIMIT):
+        resp = public_intake_client.post(
+            f"/public/intake/{PUBLIC_TOKEN}", json={"name": f"Person {i}"}
+        )
+        assert resp.status_code == 200
+
+    resp = public_intake_client.post(f"/public/intake/{PUBLIC_TOKEN}", json={"name": "One too many"})
+    assert resp.status_code == 429
+
+
+def test_public_intake_allows_cross_origin_requests(public_intake_client):
+    resp = public_intake_client.options(
+        f"/public/intake/{PUBLIC_TOKEN}",
+        headers={
+            "Origin": "https://some-other-website.example",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.headers.get("access-control-allow-origin") == "*"

@@ -334,6 +334,10 @@ and edit leads, kick off a fetch, and view stats - full read/write, no
 app install needed, from wherever you have signal, not just at the
 office.
 
+Want a public website's contact form to submit straight into your
+leads, without exposing this admin token? See `docs/PUBLIC_INTAKE.md`
+for a separate, write-only token built exactly for that.
+
 ## Notes on security
 
 - The token is the only thing standing between the internet and your
