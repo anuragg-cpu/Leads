@@ -27,7 +27,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ..config import load_config
-from ..db import Database
+from ..db_factory import open_db
 from ..models import STAGES
 from ..profiles import (
     create_profile,
@@ -72,7 +72,8 @@ class MainWindow(QMainWindow):
         self.db_path = db_path
         self.config_path = config_path
         self.profile_name = profile_name
-        self.db = Database(db_path)
+        self.config = load_config(config_path)
+        self.db = open_db(db_path, self.config)
         self.worker: Optional[FetchWorker] = None
         self._last_incremental_refresh = 0.0
 
@@ -108,7 +109,9 @@ class MainWindow(QMainWindow):
 
     def _update_window_title(self):
         suffix = f" - {self.profile_name}" if self.profile_name else ""
-        self.setWindowTitle(f"Abhay Leads{suffix}")
+        remote_url = (self.config.get("remote_server", {}) or {}).get("base_url")
+        remote_suffix = f"  [remote: {remote_url}]" if remote_url else ""
+        self.setWindowTitle(f"Abhay Leads{suffix}{remote_suffix}")
 
     # -- menu bar --------------------------------------------------------------
 
@@ -167,7 +170,8 @@ class MainWindow(QMainWindow):
         self.db_path = db_path
         self.config_path = config_path
         self.profile_name = name
-        self.db = Database(db_path)
+        self.config = load_config(config_path)
+        self.db = open_db(db_path, self.config)
 
         self._update_window_title()
         self._rebuild_profile_menu()
@@ -229,7 +233,16 @@ class MainWindow(QMainWindow):
             return
         dialog = ConfigEditorDialog(self.config_path, self)
         if dialog.exec():
+            # Reconnect in case remote_server changed - otherwise this
+            # window would keep browsing the old (local or remote) db
+            # while a fetch, which reloads config fresh, started saving
+            # somewhere else.
+            self.db.close()
+            self.config = load_config(self.config_path)
+            self.db = open_db(self.db_path, self.config)
+            self._update_window_title()
             self.status_bar.showMessage("Config saved.", 5000)
+            self.refresh()
 
     def _reset_leads(self):
         confirm = QMessageBox.question(

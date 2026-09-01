@@ -6,7 +6,7 @@ from typing import Any, Optional
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from ..db import Database
+from ..db_factory import open_db
 from ..fetcher import FetchResult, run_fetch
 
 
@@ -35,7 +35,7 @@ class FetchWorker(QThread):
 
     def run(self):
         try:
-            db = Database(self.db_path)
+            db = open_db(self.db_path, self.config)
             result: FetchResult = run_fetch(
                 db,
                 self.config,

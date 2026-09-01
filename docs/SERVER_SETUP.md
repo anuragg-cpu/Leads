@@ -311,17 +311,19 @@ remote_server:
   token: "the-same-token-from-step-1"
 ```
 Once this is set, every `abhayleads` CLI command on that machine
-(`fetch`, `list`, `show`, `update`, `digest`, etc.) talks to the server
-instead of a local database file - so your desktop and phone are always
-looking at the exact same leads. Leave `remote_server.base_url` blank
-(the default) on any profile that should keep using its own local file
-instead.
+(`fetch`, `list`, `show`, `update`, `digest`, etc.) **and the desktop
+GUI window** (`abhayleads gui`, or `Leads.exe` with no arguments) talk
+to the server instead of a local database file - so every desktop and
+your phone are always looking at the exact same leads. This is exactly
+how you'd set up a *second* desktop (or a third, etc.) to share the
+same leads too: install the app there the same way (`docs/SETUP_WINDOWS.md`),
+then add this same `remote_server` block to its config before opening
+it. Leave `remote_server.base_url` blank (the default) on any profile
+that should keep using its own local file instead.
 
-Note: this pass wires remote-server support into the CLI and the web
-UI. The **desktop GUI window** (`abhayleads gui`) still only reads a
-local database file - it doesn't yet talk to a remote server. Use the
-web UI (step 6's URL, works fine on a desktop browser too) or the CLI
-for remote access until that's added.
+Clicking **File -> Edit Config** in the GUI and adding/removing this
+block takes effect immediately in that same window - no restart
+needed, the window reconnects and refreshes as soon as you save.
 
 ## 9. Use it from your iPhone
 

@@ -88,14 +88,16 @@ request is in flight first, so it's not always instant.
 ### Accessing leads from your phone/desktop over the internet
 
 By default everything lives in a local SQLite file. To share one set of
-leads between your desktop and your phone (full read/write from Safari,
-not just a daily digest), run `abhayleads serve` on a machine that's on
-24/7 and point other installs at it with `remote_server.base_url`/
-`remote_server.token` in their `config.yaml` - see
-`docs/SERVER_SETUP.md` for the full walkthrough (TLS certificate,
-keeping it running as a service, etc.). The desktop GUI window
-(`abhayleads gui`) is local-only for now; use the CLI or the server's
-own web UI for remote access.
+leads between multiple desktops and your phone (full read/write from
+Safari, not just a daily digest), run `abhayleads serve` on a machine
+that's on 24/7 and point other installs at it with
+`remote_server.base_url`/`remote_server.token` in their `config.yaml`
+- see `docs/SERVER_SETUP.md` for the full walkthrough (TLS certificate,
+keeping it running as a service, etc.). This works for the CLI, the
+desktop GUI window (`abhayleads gui` / `Leads.exe`), and the server's
+own mobile-friendly web UI alike - install the app on as many machines
+as you want and point each one's config at the same server to share
+one set of leads across all of them.
 
 ## Project layout
 

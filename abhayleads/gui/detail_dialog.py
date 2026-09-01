@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
 
 from ..db import Database
 from ..models import STAGES
+from ..remote_db import RemoteDatabase
 
 
 class LeadDetailDialog(QDialog):
@@ -30,7 +31,7 @@ class LeadDetailDialog(QDialog):
     you've actually called or visited the place.
     """
 
-    def __init__(self, db: Database, lead_id: int, parent=None):
+    def __init__(self, db: Database | RemoteDatabase, lead_id: int, parent=None):
         super().__init__(parent)
         self.db = db
         self.lead_id = lead_id
