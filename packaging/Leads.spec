@@ -20,8 +20,33 @@ a = Analysis(
     binaries=[],
     datas=[
         (str(project_root / "config" / "config.example.yaml"), "config"),
+        # `abhayleads serve`'s web UI loads these from disk at runtime
+        # (Jinja2Templates/StaticFiles), not via Python import, so
+        # PyInstaller's static analysis never finds them on its own -
+        # without this, the built exe's `serve` command starts fine but
+        # every web UI page 500s with a template/file-not-found error.
+        (str(project_root / "abhayleads" / "server" / "templates"), "abhayleads/server/templates"),
+        (str(project_root / "abhayleads" / "server" / "static"), "abhayleads/server/static"),
     ],
-    hiddenimports=[],
+    hiddenimports=[
+        # uvicorn/starlette pick these implementations at runtime via
+        # importlib rather than a plain top-level import, so PyInstaller's
+        # static analysis misses them - without these, a packaged `serve`
+        # can fail to start (or fail on its first request) with an
+        # ImportError/ModuleNotFoundError these names don't hint at well.
+        "uvicorn.logging",
+        "uvicorn.loops",
+        "uvicorn.loops.auto",
+        "uvicorn.protocols",
+        "uvicorn.protocols.http",
+        "uvicorn.protocols.http.auto",
+        "uvicorn.protocols.websockets",
+        "uvicorn.protocols.websockets.auto",
+        "uvicorn.lifespan",
+        "uvicorn.lifespan.on",
+        "multipart",
+        "anyio._backends._asyncio",
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
