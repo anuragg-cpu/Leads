@@ -37,7 +37,7 @@ from typing import Optional
 
 from . import notify
 from .config import default_paths, load_config
-from .db import Database
+from .db_factory import open_db
 from .fetcher import run_fetch
 from .models import STAGES, LeadCandidate, utcnow_iso
 from .profiles import (
@@ -79,17 +79,13 @@ def _resolve_paths(args) -> tuple[Optional[Path], Path, Optional[str]]:
 def _get_db(args):
     """Returns a Database or, if remote_server.base_url is configured, a
     RemoteDatabase pointed at someone's `abhayleads serve` instance - the
-    two are interchangeable everywhere else in this file. See
+    two are interchangeable everywhere else in this file. Shared with the
+    GUI via db_factory.open_db so both behave identically. See
     docs/SERVER_SETUP.md.
     """
     config = _get_config(args)
-    remote = config.get("remote_server", {}) or {}
-    if remote.get("base_url"):
-        from .remote_db import RemoteDatabase
-
-        return RemoteDatabase(remote["base_url"], remote.get("token", ""))
     _, db_path, _ = _resolve_paths(args)
-    return Database(db_path)
+    return open_db(db_path, config)
 
 
 def _get_config(args):

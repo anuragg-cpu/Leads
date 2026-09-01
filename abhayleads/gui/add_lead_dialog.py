@@ -22,10 +22,11 @@ from PyQt6.QtWidgets import (
 
 from ..db import Database
 from ..models import STAGES, LeadCandidate
+from ..remote_db import RemoteDatabase
 
 
 class AddLeadDialog(QDialog):
-    def __init__(self, db: Database, parent=None):
+    def __init__(self, db: Database | RemoteDatabase, parent=None):
         super().__init__(parent)
         self.db = db
 
