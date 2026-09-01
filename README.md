@@ -17,6 +17,9 @@ a desktop window or from the command line.
 3. `docs/MARKETING_BASICS.md` - if you're new to this, read this first
 4. `docs/SOURCES.md` - what each lead source does and how to set up the
    free ones that need a key/token
+5. `docs/NOTIFICATIONS.md` - get a daily summary pushed to your iPhone
+6. `docs/SERVER_SETUP.md` - run a 24/7 server so your phone and desktop
+   share one set of leads, with full read/write from Safari
 
 ## Quick reference
 
@@ -31,11 +34,16 @@ abhayleads update 42 --phone "+91 98765 43210" --email "x@y.com"
 abhayleads stats                   pipeline summary
 abhayleads dedupe                  merge osm_places leads that are the same place mapped twice
 abhayleads reset                   delete ALL leads in the current profile to start over
+abhayleads add --company "Acme" --contact-name "Jane" --phone "..."   add a lead by hand
+abhayleads digest                  push a summary of what's new to your phone (docs/NOTIFICATIONS.md)
+abhayleads server-token             generate a token for `serve`/`remote_server` (docs/SERVER_SETUP.md)
+abhayleads serve                    run the HTTP server (JSON API + mobile web UI) for phone/desktop access
 ```
 
 Running the built `Leads.exe` with no arguments opens the same CRM
 window; any of the subcommands above work the same way, e.g.
-`Leads.exe fetch`.
+`Leads.exe fetch`. Ctrl+C during `fetch` stops it early - whatever was
+already found stays saved, same as clicking **Stop** in the GUI.
 
 ### Profiles - running this for more than one product
 
@@ -65,13 +73,39 @@ notes - since sources like OSM or Google News rarely come with a phone
 number; you fill that in yourself once you've actually called or
 visited the place.
 
+Found a lead some other way entirely (a phone call, a referral, a
+business card)? Click **Add Lead** in the toolbar (or `abhayleads add`
+from the CLI) to enter it directly - it goes straight into the same
+pipeline as everything else.
+
+### Stopping a fetch early
+
+Click **Stop** next to Find New Leads (enabled only while a fetch is
+running) to end it early - whatever's already been found stays saved,
+this just stops looking for more. It finishes whatever single network
+request is in flight first, so it's not always instant.
+
+### Accessing leads from your phone/desktop over the internet
+
+By default everything lives in a local SQLite file. To share one set of
+leads between your desktop and your phone (full read/write from Safari,
+not just a daily digest), run `abhayleads serve` on a machine that's on
+24/7 and point other installs at it with `remote_server.base_url`/
+`remote_server.token` in their `config.yaml` - see
+`docs/SERVER_SETUP.md` for the full walkthrough (TLS certificate,
+keeping it running as a service, etc.). The desktop GUI window
+(`abhayleads gui`) is local-only for now; use the CLI or the server's
+own web UI for remote access.
+
 ## Project layout
 
 ```
 abhayleads/          the application
   sources/            one file per lead source (add more here)
   gui/                PyQt6 desktop CRM
+  server/              `abhayleads serve` - JSON API + mobile web UI (docs/SERVER_SETUP.md)
   db.py               SQLite storage
+  remote_db.py         HTTP client with the same interface as db.py, for talking to `serve`
   profiles.py          multi-profile support (separate config.yaml + leads.db per product)
   scoring.py           keyword-based lead scoring
   fetcher.py           orchestrates a fetch run

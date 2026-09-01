@@ -107,3 +107,33 @@ scoring:
 
 follow_up:
   default_days: 3
+
+# Daily phone-notification digest (`abhayleads digest`) - see
+# docs/NOTIFICATIONS.md for the full setup (install the free "ntfy" app,
+# pick a topic name, subscribe to it). Leave ntfy_topic blank to keep
+# this off - `digest` still prints its summary, it just won't push.
+notifications:
+  ntfy_topic: ""
+  ntfy_base_url: "https://ntfy.sh"
+
+# Run `abhayleads serve` on a 24/7 machine (e.g. an office server) to
+# access/edit leads from your phone or another computer over HTTPS - see
+# docs/SERVER_SETUP.md. Leave token blank to keep `serve` disabled (it
+# refuses to start without one - run `abhayleads server-token` to
+# generate one). host stays 127.0.0.1 (loopback-only) for the
+# recommended setup - a local Caddy reverse proxy handles TLS/internet
+# traffic and forwards to serve locally; only switch to "0.0.0.0" if
+# serve is terminating TLS itself via --cert/--key with nothing in
+# front of it.
+server:
+  token: ""
+  host: "127.0.0.1"
+  port: 8443
+
+# Point THIS install at someone else's `abhayleads serve` instead of a
+# local database file - e.g. your desktop app talking to the office
+# server above. Leave base_url blank (the default) to keep using the
+# local profile's file, like always. See docs/SERVER_SETUP.md.
+remote_server:
+  base_url: ""
+  token: ""

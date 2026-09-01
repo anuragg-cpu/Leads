@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Abhay Leads{% endblock %}</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<nav class="topnav">
+  <a href="/" class="brand">Abhay Leads</a>
+  <a href="/leads/new">+ Add</a>
+  <a href="/fetch">Fetch</a>
+  <a href="/tools">Tools</a>
+  <form method="post" action="/logout" class="logout-form"><button type="submit">Log out</button></form>
+</nav>
+<main>
+{% block content %}{% endblock %}
+</main>
+</body>
+</html>

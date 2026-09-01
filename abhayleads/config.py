@@ -47,6 +47,34 @@ DEFAULT_CONFIG: dict[str, Any] = {
         },
     },
     "follow_up": {"default_days": 3},
+    "notifications": {
+        # Empty by default - `abhayleads digest` just prints its summary
+        # and skips sending until you set this. See docs/NOTIFICATIONS.md.
+        "ntfy_topic": "",
+        "ntfy_base_url": "https://ntfy.sh",
+    },
+    "server": {
+        # Empty by default - `abhayleads serve` refuses to start until
+        # you set this (run `abhayleads server-token` to generate one).
+        # See docs/SERVER_SETUP.md.
+        "token": "",
+        # 127.0.0.1 (loopback-only) by default, so `serve` is never
+        # accidentally reachable from outside this machine - the
+        # recommended deployment (a Caddy reverse proxy handling TLS)
+        # keeps it this way. Only set this to "0.0.0.0" if `serve` is
+        # terminating TLS itself via --cert/--key with nothing in front
+        # of it. See docs/SERVER_SETUP.md.
+        "host": "127.0.0.1",
+        "port": 8443,
+    },
+    # Point THIS install at someone else's `abhayleads serve` instead of a
+    # local database file - e.g. your desktop app talking to the office
+    # server. Empty base_url (the default) means "use the local profile's
+    # file, like always". See docs/SERVER_SETUP.md.
+    "remote_server": {
+        "base_url": "",
+        "token": "",
+    },
 }
 
 

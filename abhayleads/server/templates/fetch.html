@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Fetch - Abhay Leads{% endblock %}
+{% block content %}
+
+{% if status.running %}
+  <meta http-equiv="refresh" content="3">
+{% endif %}
+
+<div class="card">
+  <h3 style="margin-top:0;">
+    {% if status.running %}Fetch running...{% else %}Fetch{% endif %}
+  </h3>
+
+  {% if status.running %}
+    <form method="post" action="/fetch/stop">
+      <button type="submit" class="danger-button">Stop</button>
+    </form>
+  {% else %}
+    <form method="post" action="/fetch/start">
+      <label for="source" style="display:block; font-size:13px; color:#555; margin:10px 0 4px;">
+        Source (leave blank for all enabled sources)
+      </label>
+      <input type="text" id="source" name="source" placeholder="e.g. google_news"
+             style="width:100%; padding:10px; border:1px solid #d1d1d6; border-radius:8px; font-size:16px;">
+      <button type="submit" class="save-button">Find New Leads</button>
+    </form>
+  {% endif %}
+
+  {% if status.result %}
+    <p style="margin-top:16px;">
+      {% if status.result.stopped %}Stopped early{% else %}Done{% endif %}:
+      {{ status.result.new_leads }} new, {{ status.result.updated_leads }} updated.
+      {% if status.result.errors %}({{ status.result.errors|length }} source error(s)){% endif %}
+    </p>
+  {% endif %}
+  {% if status.error %}
+    <p style="color:#a3222e;">Failed: {{ status.error }}</p>
+  {% endif %}
+
+  {% if status.messages %}
+    <label style="display:block; font-size:13px; color:#555; margin:16px 0 4px;">Recent activity</label>
+    <div class="raw-text">{% for m in status.messages %}{{ m }}
+{% endfor %}</div>
+  {% endif %}
+</div>
+
+{% endblock %}

@@ -1,0 +1,11 @@
+# Caddy config for hosting Abhay Leads at leads.chipiotembedded.com.
+# See docs/SERVER_SETUP.md for the full walkthrough (this is step 5).
+#
+# Copy this file to C:\caddy\Caddyfile (or wherever you unzipped Caddy)
+# and swap the hostname below if you're using a different subdomain.
+# Caddy handles getting and renewing the HTTPS certificate on its own -
+# nothing else in this file to configure.
+
+leads.chipiotembedded.com {
+    reverse_proxy 127.0.0.1:8443
+}

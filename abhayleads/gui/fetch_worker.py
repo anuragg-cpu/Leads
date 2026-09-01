@@ -26,6 +26,13 @@ class FetchWorker(QThread):
         self.config = config
         self.only_source = only_source
 
+    def stop(self):
+        """Asks the fetch to stop at its next checkpoint (after the
+        in-flight network request, if any). Thread-safe - call this from
+        the GUI thread; QThread.isInterruptionRequested() is what run_fetch
+        actually polls, checked on the worker thread inside run()."""
+        self.requestInterruption()
+
     def run(self):
         try:
             db = Database(self.db_path)
@@ -35,6 +42,7 @@ class FetchWorker(QThread):
                 only_sources=[self.only_source] if self.only_source else None,
                 progress=self.progress.emit,
                 on_lead_saved=self.lead_saved.emit,
+                should_stop=self.isInterruptionRequested,
             )
             db.close()
             self.finished_ok.emit(result)

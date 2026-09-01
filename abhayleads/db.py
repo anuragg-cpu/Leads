@@ -53,6 +53,11 @@ CREATE TABLE IF NOT EXISTS fetch_runs (
     errors TEXT DEFAULT '[]'
 );
 
+CREATE TABLE IF NOT EXISTS digest_state (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    last_digest_at TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_leads_stage ON leads(stage);
 CREATE INDEX IF NOT EXISTS idx_leads_score ON leads(score);
 CREATE INDEX IF NOT EXISTS idx_leads_follow_up ON leads(next_follow_up);
@@ -63,6 +68,12 @@ def make_dedup_key(candidate: LeadCandidate) -> str:
     basis = candidate.source_detail or candidate.url or f"{candidate.company}|{candidate.contact_name}"
     raw = f"{candidate.source}:{basis}".strip().lower()
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def row_to_dict(row: Optional[sqlite3.Row]) -> Optional[dict]:
+    """JSON-friendly conversion, used by the server (`abhayleads serve`)
+    to turn query results into API responses."""
+    return dict(row) if row is not None else None
 
 
 class Database:
@@ -216,6 +227,45 @@ class Database:
             "by_source": by_source,
             "due_for_follow_up": due,
         }
+
+    # -- digest (for the daily phone-notification summary) ------------------
+
+    def get_last_digest_at(self) -> Optional[str]:
+        row = self.conn.execute("SELECT last_digest_at FROM digest_state WHERE id = 1").fetchone()
+        return row["last_digest_at"] if row else None
+
+    def set_last_digest_at(self, when: str):
+        self.conn.execute(
+            "INSERT INTO digest_state (id, last_digest_at) VALUES (1, ?) "
+            "ON CONFLICT(id) DO UPDATE SET last_digest_at = excluded.last_digest_at",
+            (when,),
+        )
+        self.conn.commit()
+
+    def summarize_since(self, since: Optional[str]) -> dict:
+        """Counts of what changed since `since` (an ISO timestamp, or None
+        for "everything") - the basis of the daily digest notification.
+
+        Strictly-greater-than on purpose: `since` is normally the exact
+        timestamp the previous digest stamped, and timestamps here only
+        have second precision - a lead created in that same second must
+        not be reported as new again on the next digest too.
+        """
+        if since is None:
+            new_leads = self.conn.execute("SELECT COUNT(*) as n FROM leads").fetchone()["n"]
+            updated_leads = 0  # nothing to call "updated since" on a first-ever digest
+        else:
+            new_leads = self.conn.execute(
+                "SELECT COUNT(*) as n FROM leads WHERE created_at > ?", (since,)
+            ).fetchone()["n"]
+            updated_leads = self.conn.execute(
+                "SELECT COUNT(*) as n FROM leads WHERE updated_at > ? AND created_at <= ?", (since, since)
+            ).fetchone()["n"]
+        due = self.conn.execute(
+            "SELECT COUNT(*) as n FROM leads WHERE next_follow_up IS NOT NULL AND next_follow_up <= ?",
+            (utcnow_iso()[:10],),
+        ).fetchone()["n"]
+        return {"new_leads": new_leads, "updated_leads": updated_leads, "due_for_follow_up": due}
 
     # -- leads: update ------------------------------------------------------
 

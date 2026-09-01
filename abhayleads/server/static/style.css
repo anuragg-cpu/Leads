@@ -1,0 +1,101 @@
+/* Mobile-first - this is meant to be used on a phone in Safari first,
+   a desktop browser second. */
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  margin: 0;
+  background: #f5f5f7;
+  color: #1c1c1e;
+}
+
+.topnav {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  background: #1c1c1e;
+  color: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.topnav a { color: #fff; text-decoration: none; font-size: 15px; }
+.topnav .brand { font-weight: 700; margin-right: auto; }
+.logout-form { margin: 0 0 0 auto; display: inline; }
+.logout-form button {
+  background: none; border: none; color: #fff; font-size: 15px; cursor: pointer; padding: 0;
+}
+
+main { padding: 16px; max-width: 760px; margin: 0 auto; }
+
+.stats-bar {
+  display: flex; flex-wrap: wrap; gap: 10px;
+  margin-bottom: 14px; font-size: 13px; color: #555;
+}
+.stats-bar span { background: #fff; border-radius: 8px; padding: 6px 10px; }
+
+.filters {
+  display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px;
+  background: #fff; padding: 12px; border-radius: 10px;
+}
+.filters input, .filters select {
+  padding: 8px; border: 1px solid #d1d1d6; border-radius: 8px; font-size: 15px;
+}
+.filters input[type="text"] { flex: 1; min-width: 140px; }
+.filters button {
+  padding: 8px 14px; border: none; border-radius: 8px; background: #007aff; color: #fff; font-size: 15px;
+}
+
+.lead-card {
+  display: block; background: #fff; border-radius: 10px; padding: 12px 14px;
+  margin-bottom: 8px; text-decoration: none; color: inherit;
+}
+.lead-card .row1 { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.lead-card .company { font-weight: 600; font-size: 16px; }
+.lead-card .score { font-size: 13px; color: #666; white-space: nowrap; }
+.lead-card .title { font-size: 14px; color: #444; margin-top: 2px; }
+.lead-card .meta { font-size: 12px; color: #888; margin-top: 4px; }
+.stage-badge {
+  display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600;
+  background: #e5e5ea; color: #333;
+}
+.stage-New { background: #e5e5ea; }
+.stage-Contacted { background: #d6ecff; color: #0060c7; }
+.stage-Replied { background: #fff3cd; color: #8a6100; }
+.stage-Qualified { background: #ffe4c4; color: #9a5300; }
+.stage-Won { background: #d4f7dc; color: #1c7a34; }
+.stage-Lost { background: #f8d7da; color: #a3222e; }
+
+.card {
+  background: #fff; border-radius: 10px; padding: 16px; margin-bottom: 14px;
+}
+
+form.detail-form label {
+  display: block; font-size: 13px; color: #555; margin: 12px 0 4px;
+}
+form.detail-form input[type="text"],
+form.detail-form input[type="email"],
+form.detail-form input[type="date"],
+form.detail-form select,
+form.detail-form textarea {
+  width: 100%; padding: 10px; border: 1px solid #d1d1d6; border-radius: 8px; font-size: 16px;
+}
+form.detail-form textarea { min-height: 90px; }
+.save-button {
+  margin-top: 18px; width: 100%; padding: 12px; border: none; border-radius: 10px;
+  background: #007aff; color: #fff; font-size: 16px; font-weight: 600;
+}
+.danger-button {
+  background: #ff3b30; color: #fff; border: none; border-radius: 8px; padding: 10px 14px; font-size: 15px;
+}
+.saved-banner {
+  background: #d4f7dc; color: #1c7a34; padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; font-size: 14px;
+}
+.history-list { font-size: 13px; color: #555; padding-left: 18px; }
+.raw-text { font-size: 13px; color: #666; white-space: pre-wrap; background: #f5f5f7; padding: 10px; border-radius: 8px; }
+.empty-state { text-align: center; color: #888; padding: 40px 0; }
+.back-link { display: inline-block; margin-bottom: 12px; color: #007aff; text-decoration: none; }

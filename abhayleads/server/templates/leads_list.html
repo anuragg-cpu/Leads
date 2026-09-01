@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Leads - Abhay Leads{% endblock %}
+{% block content %}
+
+<div class="stats-bar">
+  <span>{{ stats.total }} total</span>
+  <span>{{ stats.due_for_follow_up }} due</span>
+  {% for stage in stages %}<span>{{ stage }}: {{ stats.by_stage.get(stage, 0) }}</span>{% endfor %}
+</div>
+
+<form method="get" action="/" class="filters">
+  <select name="stage">
+    <option value="" {% if not filters.stage %}selected{% endif %}>All stages</option>
+    {% for stage in stages %}
+      <option value="{{ stage }}" {% if filters.stage == stage %}selected{% endif %}>{{ stage }}</option>
+    {% endfor %}
+  </select>
+  <input type="text" name="search" placeholder="Search..." value="{{ filters.search }}">
+  <label style="display:flex; align-items:center; gap:4px; font-size:14px;">
+    <input type="checkbox" name="due_only" value="true" {% if filters.due_only %}checked{% endif %}> Due
+  </label>
+  <button type="submit">Search</button>
+</form>
+
+{% if not leads %}
+  <p class="empty-state">No leads match this filter.</p>
+{% endif %}
+
+{% for lead in leads %}
+<a href="/leads/{{ lead.id }}" class="lead-card">
+  <div class="row1">
+    <span class="company">{{ lead.company or lead.contact_name or ("(" ~ lead.source ~ ")") }}</span>
+    <span class="score">{{ lead.score }}</span>
+  </div>
+  {% if lead.title %}<div class="title">{{ lead.title }}</div>{% endif %}
+  <div class="meta">
+    <span class="stage-badge stage-{{ lead.stage }}">{{ lead.stage }}</span>
+    &middot; {{ lead.source }}
+    {% if lead.next_follow_up %}&middot; follow up {{ lead.next_follow_up }}{% endif %}
+  </div>
+</a>
+{% endfor %}
+
+{% endblock %}

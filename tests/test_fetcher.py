@@ -65,3 +65,46 @@ def test_fetch_without_on_lead_saved_still_works(db, monkeypatch):
 
     assert result.new_leads == 3
     assert len(db.list_leads()) == 3
+
+
+class TwoSourceFake(BaseLeadSource):
+    """Second source, for testing that a stop mid-way through source 1
+    never even starts source 2."""
+
+    name = "fake2"
+
+    def fetch(self, keywords):
+        for i in range(3):
+            yield LeadCandidate(source=self.name, source_detail=f"s2-{i}", company=f"S2 {i}", raw_text="x")
+
+
+def test_should_stop_ends_the_fetch_early_but_keeps_leads_already_saved(db, monkeypatch):
+    monkeypatch.setattr(
+        "abhayleads.fetcher.get_enabled_sources", lambda config, only=None: [FakeSource({}), TwoSourceFake({})]
+    )
+
+    # Stop as soon as 2 leads have been saved - partway through the
+    # first source, well before the second source ever runs.
+    saved_count = {"n": 0}
+
+    def should_stop():
+        return saved_count["n"] >= 2
+
+    def on_lead_saved():
+        saved_count["n"] += 1
+
+    result = run_fetch(db, BASE_CONFIG, on_lead_saved=on_lead_saved, should_stop=should_stop)
+
+    assert result.stopped is True
+    assert result.new_leads == 2
+    assert len(db.list_leads()) == 2
+    assert all(lead["source"] == "fake" for lead in db.list_leads())  # source 2 never ran
+
+
+def test_fetch_reports_not_stopped_when_it_finishes_normally(db, monkeypatch):
+    monkeypatch.setattr("abhayleads.fetcher.get_enabled_sources", lambda config, only=None: [FakeSource({})])
+
+    result = run_fetch(db, BASE_CONFIG, should_stop=lambda: False)
+
+    assert result.stopped is False
+    assert result.new_leads == 3
