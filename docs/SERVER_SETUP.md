@@ -1,4 +1,4 @@
-# Server setup - host Abhay Leads online at leads.chipiotembedded.com
+# Server setup - host Abhay Leads online, reachable from your phone
 
 `abhayleads serve` runs the same app as a small HTTP server: a JSON API
 (so your desktop CLI/app can talk to it instead of a local file) plus a
@@ -8,30 +8,35 @@ SQLite database, so a lead you edit on your phone shows up on your
 desktop and vice versa.
 
 This runs on a machine that's on 24/7 - your office Windows Server -
-reachable from the internet at `https://leads.chipiotembedded.com`, with
-a real TLS certificate. This session ran on Linux and can't test against
-your actual server, domain, or router, so everything below was verified
-locally (a local `abhayleads serve`, the JSON API, the web UI, and the
-remote client all work end-to-end - see the test suite) but the
-deployment steps themselves need you to run them and report back if
-anything doesn't match what's described here.
+reachable from the internet with a real TLS certificate. Most of this
+doc uses `https://leads.chipiotembedded.com` as the example URL (Paths
+A-C, which put the site on your own domain), but if you can't get
+router/ISP access and don't want to touch your domain's DNS or pay for
+anything, **Path D** gets you online for free with a
+Tailscale-provided URL instead (e.g. `https://yourname.tailxxxx.ts.net`)
+- see the "Which path" note just below. This session ran on Linux and
+can't test against your actual server, domain, or router, so everything
+below was verified locally (a local `abhayleads serve`, the JSON API,
+the web UI, and the remote client all work end-to-end - see the test
+suite) but the deployment steps themselves need you to run them and
+report back if anything doesn't match what's described here.
 
 ## What you'll end up with
 
-- `https://leads.chipiotembedded.com` fully live on the internet - open
-  it on your iPhone (or any browser, anywhere), log in once with a
-  token, browse/add/edit leads, kick off fetches, all from that one URL.
+- A real HTTPS URL fully live on the internet - open it on your iPhone
+  (or any browser, anywhere), log in once with a token, browse/add/edit
+  leads, kick off fetches, all from that one URL.
 - Your desktop app/CLI pointed at the same URL instead of a local file,
   so it shows the same leads as your phone.
 - The server keeps running and holding your data even when your desktop
   is off, as long as the Windows Server itself is on - a real always-on
   deployment, not a tunnel or a temporary link.
 
-## Three ways to get HTTPS - pick one
+## Four ways to get HTTPS - pick one
 
 Browsers refuse to send the login cookie over plain HTTP (it's marked
-"Secure"), so a real certificate for `leads.chipiotembedded.com` is
-required either way. Three ways to get there:
+"Secure"), so a real certificate is required either way. Which path
+fits depends on what you have access to:
 
 - **Path A - Caddy reverse proxy (recommended if you have router
   access).** [Caddy](https://caddyserver.com) is a free web server that
@@ -40,19 +45,27 @@ required either way. Three ways to get there:
   to update a service's arguments when a cert renews. `abhayleads
   serve` itself never touches TLS or the internet directly; it only
   listens on `127.0.0.1`, and Caddy sits in front of it on port 443.
-  Needs ports 80/443 forwarded on your router. This is the path below.
+  Needs ports 80/443 forwarded on your router, and your own domain (or
+  a subdomain) pointed at your public IP. This is the path below.
 - **Path B - win-acme, no reverse proxy.** `abhayleads serve` terminates
   TLS itself using a certificate you generate with win-acme and renew
   by hand (or via win-acme's own scheduled task) every ~60-90 days. One
   fewer moving part to install, more manual upkeep. Also needs router
   port forwarding. Covered further down this doc.
-- **Path C - Cloudflare Tunnel (no router/ISP access needed).** If you
-  can't get into your router or get your ISP to forward ports (some
-  ISP-supplied boxes are locked down with no local admin access at
-  all), this path needs neither - a small program on the server makes
-  an outbound-only connection to Cloudflare, which relays your site
-  through it. No open ports, no router changes. Covered at the very
-  bottom of this doc.
+- **Path C - Cloudflare Tunnel.** No router/ISP access needed, but
+  requires moving your domain's DNS to Cloudflare (the whole domain,
+  not just a subdomain - Cloudflare doesn't support delegating just a
+  subdomain through its normal signup flow), which is a bigger, more
+  disruptive change if your domain already hosts a live site or email.
+  Covered further down this doc.
+- **Path D - Tailscale Funnel (free, no router/ISP/DNS changes at
+  all).** If you can't get router/ISP access, don't want to touch your
+  domain's DNS at all (e.g. it stays on Squarespace, untouched), and
+  don't want to pay for anything, this is the one that asks nothing of
+  you except installing one free program. The trade-off: your URL is
+  Tailscale's, not your own domain, e.g.
+  `https://yourname.tailxxxx.ts.net` instead of
+  `leads.chipiotembedded.com`. Covered at the very bottom of this doc.
 
 ## Prerequisites
 
@@ -462,3 +475,80 @@ Do steps 0-2 above (get the code, install, generate/set the token -
 
 Steps 8-9 from the top of this doc (pointing your desktop app at the
 server, using it from your iPhone) are identical either way.
+
+---
+
+## Path D - Tailscale Funnel (free, no router/ISP/DNS changes at all)
+
+Use this when router/ISP access isn't available, you don't want to
+touch your domain's DNS at all, and you don't want to pay for anything.
+[Tailscale](https://tailscale.com) is free for personal use, no time
+limit, no credit card. Like Cloudflare Tunnel, a program on the server
+makes an outbound-only connection out - no open ports, no router
+changes. The trade-off: the public URL is Tailscale's
+(`https://<machine>.<tailnet>.ts.net`), not your own domain, since
+that's what makes this path need nothing from your domain's DNS.
+
+Do steps 0-2 from the top of this doc (get the code, install,
+generate/set the token - `server.host` stays `127.0.0.1`, same as the
+Caddy path, since Tailscale connects to it locally), then:
+
+1. Sign up free at https://tailscale.com (sign in with Google,
+   Microsoft, GitHub, or email - no credit card).
+2. Install Tailscale on the Windows Server: download from
+   https://tailscale.com/download/windows, run it, sign in with the
+   same account when prompted. This connects the server to your
+   private Tailscale network and assigns it a name.
+3. In the admin console (https://login.tailscale.com/admin/machines),
+   find this server in the list and note its name (e.g. `server`).
+   Your tailnet's domain is shown in the admin console too, something
+   like `tailxxxx.ts.net` - combined, this server's address is
+   `server.tailxxxx.ts.net`.
+4. Enable HTTPS certificates for your tailnet - in the admin console,
+   go to DNS settings (https://login.tailscale.com/admin/dns) and turn
+   on **HTTPS Certificates**. Required before Funnel will work.
+5. Check Funnel is available for your account - the admin console will
+   show a prompt/link to enable it under Access Controls if it isn't
+   on by default; follow that prompt if you see it.
+6. Test it - in one terminal, run the app:
+   ```
+   venv\Scripts\python -m abhayleads serve
+   ```
+   In a second terminal, turn on Funnel pointing at that port:
+   ```
+   tailscale funnel 8443
+   ```
+   This prints your public HTTPS URL (something like
+   `https://server.tailxxxx.ts.net/`) and keeps it live while that
+   terminal stays open. Visit that URL from your phone - no Tailscale
+   app needed on the phone, Funnel makes it genuinely public, same as
+   any other website. (If the exact command differs from what's shown
+   here - Tailscale's CLI does evolve - run `tailscale funnel --help`
+   on the server for the current syntax.)
+7. Make it permanent:
+   ```
+   tailscale funnel --bg 8443
+   ```
+   The `--bg` flag keeps the funnel active in the background, surviving
+   that terminal closing (Tailscale itself already runs as a Windows
+   service from step 2). Then set up `abhayleads serve` to run 24/7 the
+   same way as the Caddy path's step 7: `nssm.exe install
+   AbhayLeadsServer` with Path = `<repo>\venv\Scripts\python.exe`,
+   Arguments = `-m abhayleads serve`, Startup directory = the repo
+   folder, then `nssm.exe start AbhayLeadsServer`.
+
+## Steps 8-9, Path D version
+
+Same idea as the top of this doc, just with a different URL:
+
+**Point your desktop app at the server** - that profile's
+`config.yaml`:
+```yaml
+remote_server:
+  base_url: "https://server.tailxxxx.ts.net"
+  token: "the-same-token-from-step-1"
+```
+
+**Use it from your iPhone** - open `https://server.tailxxxx.ts.net` in
+Safari, log in with the token, same full read/write experience as
+every other path in this doc.
