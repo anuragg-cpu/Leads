@@ -66,6 +66,15 @@ DEFAULT_CONFIG: dict[str, Any] = {
         # of it. See docs/SERVER_SETUP.md.
         "host": "127.0.0.1",
         "port": 8443,
+        # Optional, separate from `token` above - if set, exposes
+        # POST /public/intake/<this-token> as a write-only, rate-limited
+        # endpoint safe to call from a public website's client-side JS
+        # (e.g. a contact form), unlike the admin token which grants full
+        # read/write/delete on everything. Leave blank to keep this
+        # feature off entirely. Run `abhayleads server-token` to generate
+        # a value - same command as for `token`, just a second one. See
+        # docs/SERVER_SETUP.md.
+        "public_intake_token": "",
     },
     # Point THIS install at someone else's `abhayleads serve` instead of a
     # local database file - e.g. your desktop app talking to the office

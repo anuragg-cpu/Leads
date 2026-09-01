@@ -13,11 +13,14 @@ would be trivially sniffable over plain HTTP.
 """
 
 import secrets
+import threading
+import time
 import uuid
 from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import Depends, FastAPI, Form, Header, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -29,6 +32,12 @@ from .fetch_job import FetchJob
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 STATIC_DIR = Path(__file__).parent / "static"
+
+# Public intake: deliberately looser than the admin API's 5/day-in-practice
+# usage - a real visitor never submits a contact form this often, so this
+# is generous to humans while still bounding what one abusive IP can do.
+PUBLIC_INTAKE_RATE_LIMIT = 5
+PUBLIC_INTAKE_RATE_WINDOW_SECONDS = 60.0
 
 
 # -- request bodies ---------------------------------------------------------
@@ -83,13 +92,53 @@ class FetchStartBody(BaseModel):
     source: Optional[str] = None
 
 
+class PublicIntakeBody(BaseModel):
+    name: str = ""
+    company: str = ""
+    email: str = ""
+    phone: str = ""
+    message: str = ""
+    segment: str = ""
+    # Honeypot: a real visitor never sees or fills this field (it should
+    # be hidden via CSS on the form side); a bot that blindly fills every
+    # input on the page will. Filling it makes the submission silently
+    # succeed without actually creating a lead, so the bot has no signal
+    # that it was caught.
+    website: str = ""
+
+
+class _RateLimiter:
+    """Simple in-memory sliding-window limiter, per client IP. Good enough
+    for a single-process personal server fielding a contact form - not
+    meant to survive restarts or coordinate across multiple processes."""
+
+    def __init__(self, max_requests: int, window_seconds: float):
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self._hits: dict[str, list[float]] = {}
+        self._lock = threading.Lock()
+
+    def allow(self, key: str) -> bool:
+        now = time.monotonic()
+        with self._lock:
+            hits = [t for t in self._hits.get(key, []) if now - t < self.window_seconds]
+            if len(hits) >= self.max_requests:
+                self._hits[key] = hits
+                return False
+            hits.append(now)
+            self._hits[key] = hits
+            return True
+
+
 def create_app(db_path: Path, config: dict[str, Any]) -> FastAPI:
-    token = (config.get("server", {}) or {}).get("token", "")
+    server_config = config.get("server", {}) or {}
+    token = server_config.get("token", "")
     if not token:
         raise RuntimeError(
             "server.token is not set in config.yaml - run `abhayleads server-token` "
             "to generate one, add it under `server:`, then try again. See docs/SERVER_SETUP.md."
         )
+    public_intake_token = server_config.get("public_intake_token", "")
 
     app = FastAPI(title="Abhay Leads Server")
     if STATIC_DIR.exists():
@@ -260,6 +309,68 @@ def create_app(db_path: Path, config: dict[str, Any]) -> FastAPI:
         return {"ok": True}
 
     app.mount("/api", api, name="api")
+
+    # -- Public intake (optional - a separate, write-only token safe to --
+    # -- embed in a public website's client-side JS, e.g. a contact form --
+
+    if public_intake_token:
+        # A dedicated sub-app so CORS (needed for a browser on a totally
+        # different domain to POST here) only applies to this one route,
+        # not the admin API or the cookie-authenticated web UI above.
+        # allow_credentials stays False - this never needs cookies, and
+        # combining it with allow_origins=["*"] would be rejected by
+        # browsers anyway (and would be a real risk if it weren't).
+        public = FastAPI()
+        public.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],
+            allow_credentials=False,
+            allow_methods=["POST"],
+            allow_headers=["*"],
+        )
+        rate_limiter = _RateLimiter(PUBLIC_INTAKE_RATE_LIMIT, PUBLIC_INTAKE_RATE_WINDOW_SECONDS)
+
+        @public.post("/intake/{path_token}")
+        def public_intake(
+            path_token: str, body: PublicIntakeBody, request: Request, db: Database = Depends(get_db)
+        ):
+            # 404, not 401, for a wrong/missing token - doesn't reveal to
+            # anyone probing URLs that this path exists at all versus any
+            # other nonexistent one.
+            if not secrets.compare_digest(path_token, public_intake_token):
+                raise HTTPException(status_code=404)
+
+            if body.website:
+                # Honeypot tripped - pretend success, save nothing, give
+                # the bot no signal that it was caught.
+                return {"ok": True}
+
+            client_ip = request.client.host if request.client else "unknown"
+            if not rate_limiter.allow(client_ip):
+                raise HTTPException(status_code=429, detail="Too many submissions - try again in a minute.")
+
+            name = body.name.strip()
+            company = body.company.strip()
+            if not name and not company:
+                raise HTTPException(status_code=400, detail="Provide at least a name or company.")
+
+            raw_text = body.message.strip()
+            if body.segment.strip():
+                raw_text = f"{raw_text}\n\nSegment: {body.segment.strip()}".strip()
+
+            candidate = LeadCandidate(
+                source="website_form",
+                source_detail=f"public-intake-{uuid.uuid4().hex}",
+                company=company,
+                contact_name=name,
+                email=body.email.strip(),
+                phone=body.phone.strip(),
+                raw_text=raw_text,
+            )
+            db.upsert_candidate(candidate, score=0)
+            return {"ok": True}
+
+        app.mount("/public", public, name="public")
 
     # -- HTML UI (cookie session) --------------------------------------------
 

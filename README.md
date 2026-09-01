@@ -20,6 +20,8 @@ a desktop window or from the command line.
 5. `docs/NOTIFICATIONS.md` - get a daily summary pushed to your iPhone
 6. `docs/SERVER_SETUP.md` - run a 24/7 server so your phone and desktop
    share one set of leads, with full read/write from Safari
+7. `docs/PUBLIC_INTAKE.md` - take leads straight from a public website's
+   contact form, no separate proxy service needed
 
 ## Quick reference
 
