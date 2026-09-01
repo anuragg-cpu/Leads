@@ -51,9 +51,30 @@ required either way. Two ways to get there:
 
 - The Windows Server machine, with admin access
 - Access to your domain's DNS settings (wherever `chipiotembedded.com`
-  is registered/managed)
+  is registered/managed) - e.g. Squarespace, see the note under step 3
 - Access to your office router/firewall, to forward ports
-- This repo on the server (same as `docs/SETUP_WINDOWS.md` steps 1-2)
+- Git and this repo on the server - step 0 below
+
+## 0. Get Git and the code onto the server
+
+If `git --version` in a terminal already prints a version, skip to
+step 1 - you have this already.
+
+1. Download the installer from https://git-scm.com/download/win, run
+   it, keep all the default options. Close and reopen your terminal
+   afterward so it picks up the new PATH.
+2. The server-mode code in this doc lives on a branch that hasn't been
+   merged to `main` yet, so check it out explicitly:
+   ```
+   cd C:\
+   git clone https://github.com/anuragg-cpu/Leads.git AbhayLeads
+   cd AbhayLeads
+   git checkout claude/abhay-lead-generation-script-f6ktnu
+   ```
+   (Once that branch is merged, a plain `git clone` with no
+   `checkout` will get you the server code directly - ask if you want
+   that merged.) Every command from here on assumes you're inside this
+   `C:\AbhayLeads` folder.
 
 ## 1. Install and generate an access token
 
@@ -103,6 +124,31 @@ anything already running on `www.chipiotembedded.com`.)
 DNS changes can take a few minutes to a few hours to propagate. You can
 check with `nslookup leads.chipiotembedded.com` from any machine once
 you're ready to test.
+
+### If nslookup times out but your browser works fine
+
+This is a common Windows quirk, not a sign anything's actually broken:
+`nslookup` bypasses the normal OS DNS resolver and queries whatever
+server is configured directly over raw UDP port 53 - if that
+particular server (often an IPv6 one your ISP handed out, e.g.
+`2001:....`) isn't actually reachable, `nslookup` hangs and times out
+even though every other program (browser, `ping <hostname>`, git,
+Caddy, PowerShell) uses the real OS resolver and works fine.
+
+Confirm with `ping <hostname>` instead (not an IP) - if the very first
+line shows a resolved address (`Pinging google.com [142.250...]`), DNS
+itself is fine even if the ping replies after that say "timed out"
+(that's just ICMP being blocked, unrelated to DNS). If `ping
+google.com` resolves but shows an IPv6 address and then "Destination
+host unreachable," your network has a non-working IPv6 path - the fix
+is to disable IPv6 on the active adapter (`ncpa.cpl` -> right-click the
+adapter -> Properties -> uncheck "Internet Protocol Version 6") so
+everything falls back to IPv4, which is what's actually working.
+Once that's done, `nslookup` should also stop timing out. Either way,
+if `ping <hostname>` and your browser both work, you can trust that
+DNS is fine for the actual deployment even if `nslookup` alone still
+misbehaves - or just target it at a known-good server directly to
+sidestep the issue: `nslookup leads.chipiotembedded.com 8.8.8.8`.
 
 ### If your office's public IP isn't static
 
