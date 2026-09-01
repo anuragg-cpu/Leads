@@ -80,7 +80,16 @@ class Database:
     def __init__(self, db_path: Path):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(str(self.db_path))
+        # check_same_thread=False: `abhayleads serve` opens one Database
+        # per HTTP request via a sync FastAPI dependency, and the
+        # anyio/Starlette thread pool that runs sync dependencies doesn't
+        # guarantee the same worker thread handles both the "before yield"
+        # (open) and "after yield" (close) halves of one request - without
+        # this, that mismatch raises "SQLite objects created in a thread
+        # can only be used in that same thread" under concurrent load, even
+        # though each connection is still only ever used by one request/
+        # thread at a time, never genuinely shared across threads at once.
+        self.conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA foreign_keys = ON")
         # WAL lets one connection write while another reads without either
