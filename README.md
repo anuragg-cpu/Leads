@@ -80,6 +80,20 @@ business card)? Click **Add Lead** in the toolbar (or `abhayleads add`
 from the CLI) to enter it directly - it goes straight into the same
 pipeline as everything else.
 
+### Viewing leads on a map
+
+Click **Map** in the toolbar to open a map of every lead that has a known
+location, in your default browser - clustered, colored by pipeline stage,
+with a popup linking back to the lead. Only leads found via the
+`osm_places` source carry coordinates; run **Find New Leads** (with
+osm_places enabled) if the map looks empty. When this window is pointed at
+a shared server (`remote_server` configured), each popup also links to
+that lead's page on the server so you can jump straight into full detail;
+in local-only mode the popup is just the summary, since there's no web
+server to link to. `abhayleads serve`'s own web UI has the same map at
+`/map` - see "Accessing leads from your phone/desktop over the internet"
+below.
+
 ### Stopping a fetch early
 
 Click **Stop** next to Find New Leads (enabled only while a fetch is

@@ -12,7 +12,6 @@ because deployment is HTTPS-only (see docs/SERVER_SETUP.md) - the token
 would be trivially sniffable over plain HTTP.
 """
 
-import json
 import secrets
 import threading
 import time
@@ -28,6 +27,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from ..db import Database, row_to_dict
+from ..mapview import leads_to_map_points, safe_json_for_script
 from ..models import STAGES, LeadCandidate
 from .fetch_job import FetchJob
 
@@ -131,16 +131,6 @@ class _RateLimiter:
             hits.append(now)
             self._hits[key] = hits
             return True
-
-
-def _safe_json_for_script(value: Any) -> str:
-    """json.dumps, escaped so it's safe to embed inside a <script> tag
-    even if a field (a lead's company name, etc.) happens to contain
-    "</script>" or other HTML-sensitive characters - same escaping
-    Flask's `tojson` filter and Django's `json_script` use. Starlette's
-    Jinja2Templates has no built-in equivalent, so this is done here in
-    Python rather than relying on a template filter that doesn't exist."""
-    return json.dumps(value).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
 
 
 def create_app(db_path: Path, config: dict[str, Any]) -> FastAPI:
@@ -441,23 +431,12 @@ def create_app(db_path: Path, config: dict[str, Any]) -> FastAPI:
         leads = db.leads_with_coordinates(stage=stage or None)
         # Only what the map actually needs, as plain JSON embedded in the
         # page - Leaflet reads this directly, no separate API round trip.
-        points = [
-            {
-                "id": lead["id"],
-                "lat": lead["lat"],
-                "lon": lead["lon"],
-                "company": lead["company"] or lead["contact_name"] or lead["source"],
-                "title": lead["title"],
-                "stage": lead["stage"],
-                "score": lead["score"],
-            }
-            for lead in leads
-        ]
+        points = leads_to_map_points(leads)
         return templates.TemplateResponse(
             request,
             "map.html",
             {
-                "points_json": _safe_json_for_script(points),
+                "points_json": safe_json_for_script(points),
                 "stages": STAGES,
                 "filters": {"stage": stage},
                 "total_with_coordinates": len(points),
