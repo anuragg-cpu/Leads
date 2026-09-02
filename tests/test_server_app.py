@@ -223,6 +223,108 @@ def test_web_lead_form_add_edit_delete(client):
     assert resp.status_code == 404
 
 
+def _embedded_points(html: str) -> list:
+    import json as _json
+
+    marker = "var points = "
+    start = html.index(marker) + len(marker)
+    end = html.index(";\n", start)
+    return _json.loads(html[start:end])
+
+
+def test_map_requires_login(client):
+    resp = client.get("/map", follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.headers["location"].startswith("/login")
+
+
+def test_map_page_empty_state_when_no_leads_have_coordinates(client):
+    client.cookies.set("session_token", TOKEN)
+    client.post(
+        "/api/leads/upsert",
+        headers=auth_headers(),
+        json={"source": "manual", "source_detail": "no-coords", "company": "No Map Co", "score": 10},
+    )
+
+    resp = client.get("/map")
+    assert resp.status_code == 200
+    assert "No leads with a map location yet" in resp.text
+    assert "leads-map" not in resp.text  # the map div itself shouldn't render
+
+
+def test_map_page_includes_only_leads_with_coordinates(client):
+    client.cookies.set("session_token", TOKEN)
+    client.post(
+        "/api/leads/upsert",
+        headers=auth_headers(),
+        json={
+            "source": "osm_places",
+            "source_detail": "with-coords",
+            "company": "Mapped Hospital",
+            "lat": 18.55,
+            "lon": 73.78,
+            "score": 30,
+        },
+    )
+    client.post(
+        "/api/leads/upsert",
+        headers=auth_headers(),
+        json={"source": "manual", "source_detail": "no-coords", "company": "Unmapped Co", "score": 10},
+    )
+
+    resp = client.get("/map")
+    assert resp.status_code == 200
+    points = _embedded_points(resp.text)
+    assert len(points) == 1
+    assert points[0]["company"] == "Mapped Hospital"
+    assert points[0]["lat"] == 18.55
+    assert points[0]["lon"] == 73.78
+
+
+def test_map_page_filters_by_stage(client):
+    client.cookies.set("session_token", TOKEN)
+    resp = client.post(
+        "/api/leads/upsert",
+        headers=auth_headers(),
+        json={
+            "source": "osm_places", "source_detail": "a", "company": "A",
+            "lat": 1.0, "lon": 2.0, "score": 30,
+        },
+    )
+    lead_id = resp.json()["id"]
+    client.post(
+        "/api/leads/upsert",
+        headers=auth_headers(),
+        json={
+            "source": "osm_places", "source_detail": "b", "company": "B",
+            "lat": 3.0, "lon": 4.0, "score": 30,
+        },
+    )
+    client.patch(f"/api/leads/{lead_id}", headers=auth_headers(), json={"stage": "Contacted"})
+
+    resp = client.get("/map", params={"stage": "Contacted"})
+    points = _embedded_points(resp.text)
+    assert len(points) == 1
+    assert points[0]["company"] == "A"
+
+
+def test_map_page_escapes_company_name_to_avoid_breaking_out_of_script_tag(client):
+    client.cookies.set("session_token", TOKEN)
+    client.post(
+        "/api/leads/upsert",
+        headers=auth_headers(),
+        json={
+            "source": "osm_places", "source_detail": "xss", "company": "</script><script>alert(1)</script>",
+            "lat": 1.0, "lon": 2.0, "score": 30,
+        },
+    )
+
+    resp = client.get("/map")
+    assert "</script><script>alert(1)</script>" not in resp.text
+    points = _embedded_points(resp.text)
+    assert points[0]["company"] == "</script><script>alert(1)</script>"  # decodes back correctly
+
+
 def test_web_fetch_and_tools_pages_render(client):
     client.cookies.set("session_token", TOKEN)
     assert client.get("/fetch").status_code == 200

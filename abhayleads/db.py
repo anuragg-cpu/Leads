@@ -33,7 +33,9 @@ CREATE TABLE IF NOT EXISTS leads (
     next_follow_up TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    last_seen_at TEXT NOT NULL
+    last_seen_at TEXT NOT NULL,
+    lat REAL,
+    lon REAL
 );
 
 CREATE TABLE IF NOT EXISTS stage_history (
@@ -76,6 +78,17 @@ def row_to_dict(row: Optional[sqlite3.Row]) -> Optional[dict]:
     return dict(row) if row is not None else None
 
 
+def _add_column_if_missing(conn: sqlite3.Connection, table: str, column: str, column_type: str):
+    """CREATE TABLE IF NOT EXISTS is a no-op on a table that already
+    exists, so a column added to SCHEMA after leads.db files are already
+    out in the wild (like lat/lon here) needs an explicit ALTER TABLE for
+    anyone upgrading - guarded so this is a no-op itself on a fresh db
+    that already has the column from SCHEMA above."""
+    existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in existing:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_type}")
+
+
 class Database:
     def __init__(self, db_path: Path):
         self.db_path = Path(db_path)
@@ -98,6 +111,8 @@ class Database:
         # on the main thread) run against the same file at the same time.
         self.conn.execute("PRAGMA journal_mode = WAL")
         self.conn.executescript(SCHEMA)
+        _add_column_if_missing(self.conn, "leads", "lat", "REAL")
+        _add_column_if_missing(self.conn, "leads", "lon", "REAL")
         self.conn.commit()
 
     def close(self):
@@ -149,13 +164,14 @@ class Database:
                 """INSERT INTO leads
                    (dedup_key, company, contact_name, title, email, phone, url,
                     source, source_detail, keyword_matched, raw_text, score,
-                    stage, notes, next_follow_up, created_at, updated_at, last_seen_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'New', '', NULL, ?, ?, ?)""",
+                    stage, notes, next_follow_up, created_at, updated_at, last_seen_at,
+                    lat, lon)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'New', '', NULL, ?, ?, ?, ?, ?)""",
                 (
                     dedup_key, candidate.company, candidate.contact_name, candidate.title,
                     candidate.email, candidate.phone, candidate.url, candidate.source,
                     candidate.source_detail, candidate.keyword_matched, candidate.raw_text,
-                    score, now, now, now,
+                    score, now, now, now, candidate.lat, candidate.lon,
                 ),
             )
             lead_id = cur.lastrowid
@@ -168,10 +184,19 @@ class Database:
 
         lead_id = existing["id"]
         new_score = max(existing["score"], score)
-        self.conn.execute(
-            "UPDATE leads SET last_seen_at=?, score=?, updated_at=? WHERE id=?",
-            (now, new_score, now, lead_id),
-        )
+        if candidate.lat is not None and candidate.lon is not None:
+            # Only overwrite if this re-fetch actually has coordinates -
+            # never clobber a previously-known point with NULL just
+            # because this particular re-discovery didn't carry one.
+            self.conn.execute(
+                "UPDATE leads SET last_seen_at=?, score=?, updated_at=?, lat=?, lon=? WHERE id=?",
+                (now, new_score, now, candidate.lat, candidate.lon, lead_id),
+            )
+        else:
+            self.conn.execute(
+                "UPDATE leads SET last_seen_at=?, score=?, updated_at=? WHERE id=?",
+                (now, new_score, now, lead_id),
+            )
         self.conn.commit()
         return lead_id, False
 
@@ -206,6 +231,19 @@ class Database:
 
     def get_lead(self, lead_id: int) -> Optional[sqlite3.Row]:
         return self.conn.execute("SELECT * FROM leads WHERE id = ?", (lead_id,)).fetchone()
+
+    def leads_with_coordinates(
+        self, stage: Optional[str] = None, min_score: int = 0
+    ) -> list[sqlite3.Row]:
+        """For the map view - only osm_places leads normally have lat/lon
+        (see LeadCandidate), so this is typically a subset of list_leads()."""
+        query = "SELECT * FROM leads WHERE lat IS NOT NULL AND lon IS NOT NULL AND score >= ?"
+        params: list = [min_score]
+        if stage:
+            query += " AND stage = ?"
+            params.append(stage)
+        query += " ORDER BY score DESC"
+        return self.conn.execute(query, params).fetchall()
 
     def stage_history(self, lead_id: int) -> list[sqlite3.Row]:
         return self.conn.execute(

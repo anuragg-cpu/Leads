@@ -12,6 +12,7 @@ because deployment is HTTPS-only (see docs/SERVER_SETUP.md) - the token
 would be trivially sniffable over plain HTTP.
 """
 
+import json
 import secrets
 import threading
 import time
@@ -54,6 +55,8 @@ class UpsertCandidateBody(BaseModel):
     url: str = ""
     keyword_matched: str = ""
     raw_text: str = ""
+    lat: Optional[float] = None
+    lon: Optional[float] = None
     score: int = 0
 
 
@@ -130,6 +133,16 @@ class _RateLimiter:
             return True
 
 
+def _safe_json_for_script(value: Any) -> str:
+    """json.dumps, escaped so it's safe to embed inside a <script> tag
+    even if a field (a lead's company name, etc.) happens to contain
+    "</script>" or other HTML-sensitive characters - same escaping
+    Flask's `tojson` filter and Django's `json_script` use. Starlette's
+    Jinja2Templates has no built-in equivalent, so this is done here in
+    Python rather than relying on a template filter that doesn't exist."""
+    return json.dumps(value).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+
+
 def create_app(db_path: Path, config: dict[str, Any]) -> FastAPI:
     server_config = config.get("server", {}) or {}
     token = server_config.get("token", "")
@@ -199,6 +212,8 @@ def create_app(db_path: Path, config: dict[str, Any]) -> FastAPI:
             url=body.url,
             keyword_matched=body.keyword_matched,
             raw_text=body.raw_text,
+            lat=body.lat,
+            lon=body.lon,
         )
         lead_id, is_new = db.upsert_candidate(candidate, body.score)
         return {"id": lead_id, "is_new": is_new}
@@ -416,6 +431,36 @@ def create_app(db_path: Path, config: dict[str, Any]) -> FastAPI:
                 "stats": db.stats(),
                 "stages": STAGES,
                 "filters": {"stage": stage, "min_score": min_score, "due_only": due_only, "search": search},
+            },
+        )
+
+    @app.get("/map", response_class=HTMLResponse)
+    def map_page(request: Request, stage: str = "", db: Database = Depends(get_db)):
+        if redirect := web_auth_redirect(request):
+            return redirect
+        leads = db.leads_with_coordinates(stage=stage or None)
+        # Only what the map actually needs, as plain JSON embedded in the
+        # page - Leaflet reads this directly, no separate API round trip.
+        points = [
+            {
+                "id": lead["id"],
+                "lat": lead["lat"],
+                "lon": lead["lon"],
+                "company": lead["company"] or lead["contact_name"] or lead["source"],
+                "title": lead["title"],
+                "stage": lead["stage"],
+                "score": lead["score"],
+            }
+            for lead in leads
+        ]
+        return templates.TemplateResponse(
+            request,
+            "map.html",
+            {
+                "points_json": _safe_json_for_script(points),
+                "stages": STAGES,
+                "filters": {"stage": stage},
+                "total_with_coordinates": len(points),
             },
         )
 
