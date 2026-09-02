@@ -1,6 +1,8 @@
 """Main CRM window."""
 
+import tempfile
 import time
+import webbrowser
 from pathlib import Path
 from typing import Optional
 
@@ -28,6 +30,7 @@ from PyQt6.QtWidgets import (
 
 from ..config import load_config
 from ..db_factory import open_db
+from ..mapview import leads_to_map_points, render_standalone_map_html
 from ..models import STAGES
 from ..profiles import (
     create_profile,
@@ -265,6 +268,38 @@ class MainWindow(QMainWindow):
             self.status_bar.showMessage("Lead added.", 5000)
             self.refresh()
 
+    def _show_map(self):
+        # PyQt6 has no bundled web view here (that's QtWebEngine, a heavy
+        # extra dependency this app doesn't otherwise need), so the map
+        # opens in the user's normal browser instead - a self-contained
+        # local HTML file, same Leaflet rendering as the server's /map
+        # page (see mapview.py).
+        stage = self.stage_filter.currentText()
+        leads = self.db.list_leads(stage=None if stage == "All" else stage)
+        located_leads = [lead for lead in leads if lead["lat"] is not None and lead["lon"] is not None]
+        points = leads_to_map_points(located_leads)
+
+        # Only meaningful when this window is pointed at a shared server -
+        # a local-only db has no web server for "Open lead" to link to.
+        remote_base_url = (self.config.get("remote_server", {}) or {}).get("base_url")
+
+        html = render_standalone_map_html(points, lead_url_base=remote_base_url)
+        with tempfile.NamedTemporaryFile(
+            "w", prefix="abhayleads_map_", suffix=".html", delete=False, encoding="utf-8"
+        ) as f:
+            f.write(html)
+            map_path = f.name
+        webbrowser.open(f"file://{map_path}")
+
+        if points:
+            self.status_bar.showMessage(f"Opened map with {len(points)} lead(s) in your browser.", 8000)
+        else:
+            self.status_bar.showMessage(
+                "Opened map in your browser - no leads have a location yet "
+                "(only osm_places leads carry coordinates; try Find New Leads).",
+                8000,
+            )
+
     # -- toolbar -----------------------------------------------------------
 
     def _build_toolbar(self) -> QHBoxLayout:
@@ -282,6 +317,10 @@ class MainWindow(QMainWindow):
         add_lead_button = QPushButton("Add Lead")
         add_lead_button.clicked.connect(self._add_lead)
         row.addWidget(add_lead_button)
+
+        map_button = QPushButton("Map")
+        map_button.clicked.connect(self._show_map)
+        row.addWidget(map_button)
 
         row.addWidget(QLabel("Stage:"))
         self.stage_filter = QComboBox()
