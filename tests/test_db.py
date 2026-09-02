@@ -330,3 +330,119 @@ def test_connection_usable_across_threads():
 
         if "error" in holder:
             raise holder["error"]
+
+
+def test_opening_a_pre_existing_db_without_lat_lon_columns_migrates_cleanly():
+    # Simulates a leads.db created before lat/lon existed - CREATE TABLE
+    # IF NOT EXISTS is a no-op on an already-existing table, so opening
+    # one of these needs the explicit ALTER TABLE migration to not crash
+    # the moment anything touches the lat/lon columns.
+    import sqlite3
+
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = Path(tmp) / "old.db"
+        conn = sqlite3.connect(str(db_path))
+        conn.executescript(
+            """
+            CREATE TABLE leads (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                dedup_key TEXT UNIQUE NOT NULL,
+                company TEXT DEFAULT '',
+                contact_name TEXT DEFAULT '',
+                title TEXT DEFAULT '',
+                email TEXT DEFAULT '',
+                phone TEXT DEFAULT '',
+                url TEXT DEFAULT '',
+                source TEXT NOT NULL,
+                source_detail TEXT DEFAULT '',
+                keyword_matched TEXT DEFAULT '',
+                raw_text TEXT DEFAULT '',
+                score INTEGER DEFAULT 0,
+                stage TEXT DEFAULT 'New',
+                notes TEXT DEFAULT '',
+                next_follow_up TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                last_seen_at TEXT NOT NULL
+            );
+            CREATE TABLE stage_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                lead_id INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+                stage TEXT NOT NULL,
+                changed_at TEXT NOT NULL
+            );
+            """
+        )
+        conn.commit()
+        conn.close()
+
+        database = Database(db_path)
+        try:
+            lead_id, _ = database.upsert_candidate(make_candidate(lat=1.0, lon=2.0), score=10)
+            lead = database.get_lead(lead_id)
+            assert lead["lat"] == 1.0
+            assert lead["lon"] == 2.0
+        finally:
+            database.close()
+
+
+def test_upsert_candidate_stores_coordinates(db):
+    lead_id, _ = db.upsert_candidate(make_candidate(lat=18.55, lon=73.78), score=30)
+    lead = db.get_lead(lead_id)
+    assert lead["lat"] == 18.55
+    assert lead["lon"] == 73.78
+
+
+def test_upsert_candidate_without_coordinates_leaves_them_null(db):
+    lead_id, _ = db.upsert_candidate(make_candidate(), score=10)
+    lead = db.get_lead(lead_id)
+    assert lead["lat"] is None
+    assert lead["lon"] is None
+
+
+def test_upsert_candidate_refreshes_coordinates_on_rediscovery(db):
+    candidate = make_candidate(source_detail="same-place", lat=18.55, lon=73.78)
+    lead_id, _ = db.upsert_candidate(candidate, score=30)
+
+    moved = make_candidate(source_detail="same-place", lat=18.56, lon=73.79)
+    db.upsert_candidate(moved, score=30)
+
+    lead = db.get_lead(lead_id)
+    assert lead["lat"] == 18.56
+    assert lead["lon"] == 73.79
+
+
+def test_upsert_candidate_rediscovery_without_coordinates_keeps_existing_ones(db):
+    # A re-fetch that doesn't carry a point (e.g. a different source
+    # matching the same dedup key) must never blank out a point this
+    # lead already had.
+    candidate = make_candidate(source_detail="same-place", lat=18.55, lon=73.78)
+    lead_id, _ = db.upsert_candidate(candidate, score=30)
+
+    no_point = make_candidate(source_detail="same-place")
+    db.upsert_candidate(no_point, score=30)
+
+    lead = db.get_lead(lead_id)
+    assert lead["lat"] == 18.55
+    assert lead["lon"] == 73.78
+
+
+def test_leads_with_coordinates_only_returns_leads_that_have_a_point(db):
+    db.upsert_candidate(make_candidate(source_detail="a", lat=18.55, lon=73.78), score=30)
+    db.upsert_candidate(make_candidate(source_detail="b"), score=10)
+
+    points = db.leads_with_coordinates()
+
+    assert len(points) == 1
+    assert points[0]["lat"] == 18.55
+
+
+def test_leads_with_coordinates_filters_by_stage(db):
+    lead_id, _ = db.upsert_candidate(make_candidate(source_detail="a", lat=18.55, lon=73.78), score=30)
+    db.upsert_candidate(make_candidate(source_detail="b", lat=1.0, lon=2.0), score=30)
+    db.update_lead(lead_id, stage="Contacted")
+
+    points = db.leads_with_coordinates(stage="Contacted")
+
+    assert len(points) == 1
+    assert points[0]["id"] == lead_id

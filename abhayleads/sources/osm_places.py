@@ -219,6 +219,14 @@ class OSMPlacesSource(BaseLeadSource):
         address = ", ".join(p for p in address_parts if p)
         raw_text = f"{label} near {locality}" + (f" - {address}" if address else "")
 
+        # Requested with `out center tags` - a node's point is directly on
+        # the element, but a way/relation (most buildings) has no single
+        # point of its own, so Overpass instead gives its centroid under
+        # "center". Either way there's a usable point for the map.
+        center = element.get("center") or element
+        lat = center.get("lat")
+        lon = center.get("lon")
+
         return LeadCandidate(
             source=self.name,
             source_detail=url,
@@ -226,4 +234,6 @@ class OSMPlacesSource(BaseLeadSource):
             title=f"{label}: {name} ({locality})",
             url=url,
             raw_text=raw_text,
+            lat=float(lat) if lat is not None else None,
+            lon=float(lon) if lon is not None else None,
         )

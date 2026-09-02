@@ -26,6 +26,11 @@ class LeadCandidate:
     url: str = ""
     keyword_matched: str = ""
     raw_text: str = ""
+    # Only osm_places sets these (Overpass returns a real point/center for
+    # every place it finds) - every other source leaves them None, since
+    # there's no reliable coordinate for e.g. a news article or HN post.
+    lat: Optional[float] = None
+    lon: Optional[float] = None
     discovered_at: str = field(default_factory=utcnow_iso)
 
 
@@ -52,3 +57,5 @@ class Lead:
     created_at: str
     updated_at: str
     last_seen_at: str
+    lat: Optional[float] = None
+    lon: Optional[float] = None

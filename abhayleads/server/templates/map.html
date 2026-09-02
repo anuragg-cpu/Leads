@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Map - Abhay Leads{% endblock %}
+{% block content %}
+
+<form method="get" action="/map" class="filters">
+  <select name="stage">
+    <option value="" {% if not filters.stage %}selected{% endif %}>All stages</option>
+    {% for stage in stages %}
+      <option value="{{ stage }}" {% if filters.stage == stage %}selected{% endif %}>{{ stage }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit">Filter</button>
+</form>
+
+{% if total_with_coordinates == 0 %}
+  <p class="empty-state">
+    No leads with a map location yet. Only <strong>osm_places</strong> leads
+    carry coordinates - run <a href="/fetch">Fetch</a> (with osm_places
+    enabled) to populate the map. Leads found before this feature was
+    added won't have a location until they're re-fetched.
+  </p>
+{% else %}
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+
+  <div id="leads-map" style="height:70vh; border-radius:10px; overflow:hidden;"></div>
+  <p style="font-size:13px; color:#888; margin-top:8px;">{{ total_with_coordinates }} lead(s) on the map</p>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script>
+  (function () {
+    var points = {{ points_json | safe }};
+    if (!points.length) return;
+
+    var map = L.map('leads-map');
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    var stageColors = {
+      New: '#8e8e93', Contacted: '#0060c7', Replied: '#8a6100',
+      Qualified: '#9a5300', Won: '#1c7a34', Lost: '#a3222e'
+    };
+
+    var clusters = L.markerClusterGroup({ maxClusterRadius: 50 });
+    var bounds = [];
+
+    points.forEach(function (p) {
+      var color = stageColors[p.stage] || '#8e8e93';
+      var marker = L.circleMarker([p.lat, p.lon], {
+        radius: 8, color: color, fillColor: color, fillOpacity: 0.85, weight: 1
+      });
+      var popup = '<strong>' + escapeHtml(p.company) + '</strong>';
+      if (p.title) popup += '<br>' + escapeHtml(p.title);
+      popup += '<br><span class="stage-badge stage-' + escapeHtml(p.stage) + '">' + escapeHtml(p.stage) + '</span>'
+        + ' &middot; score ' + p.score;
+      popup += '<br><a href="/leads/' + p.id + '">Open lead &rarr;</a>';
+      marker.bindPopup(popup);
+      clusters.addLayer(marker);
+      bounds.push([p.lat, p.lon]);
+    });
+
+    map.addLayer(clusters);
+    map.fitBounds(bounds, { padding: [30, 30] });
+
+    function escapeHtml(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+  })();
+  </script>
+{% endif %}
+
+{% endblock %}

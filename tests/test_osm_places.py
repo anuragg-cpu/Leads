@@ -44,6 +44,44 @@ def test_element_to_candidate_builds_expected_fields():
     assert "Sassoon Road" in candidate.raw_text
 
 
+def test_element_to_candidate_extracts_center_point_for_a_way():
+    # A way/relation (most buildings) has no point of its own - Overpass
+    # gives its centroid under "center" (requested via `out center tags`).
+    source = make_source()
+    element = {
+        "type": "way",
+        "id": 1,
+        "center": {"lat": 18.5599, "lon": 73.7799},
+        "tags": {"name": "Ruby Hall Clinic"},
+    }
+    candidate = source._element_to_candidate(element, "Baner", "Hospital")
+    assert candidate.lat == 18.5599
+    assert candidate.lon == 73.7799
+
+
+def test_element_to_candidate_extracts_direct_point_for_a_node():
+    # A node's own lat/lon is the point - no "center" key for these.
+    source = make_source()
+    element = {
+        "type": "node",
+        "id": 2,
+        "lat": 18.5,
+        "lon": 73.8,
+        "tags": {"name": "Some Clinic"},
+    }
+    candidate = source._element_to_candidate(element, "Baner", "Hospital")
+    assert candidate.lat == 18.5
+    assert candidate.lon == 73.8
+
+
+def test_element_to_candidate_lat_lon_none_when_no_point_available():
+    source = make_source()
+    element = {"type": "way", "id": 3, "tags": {"name": "No Coordinates Inc"}}
+    candidate = source._element_to_candidate(element, "Baner", "Hospital")
+    assert candidate.lat is None
+    assert candidate.lon is None
+
+
 def test_element_to_candidate_skips_unnamed_places():
     source = make_source()
     element = {"type": "node", "id": 999, "tags": {}}

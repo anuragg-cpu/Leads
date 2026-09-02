@@ -77,6 +77,8 @@ class RemoteDatabase:
             "url": candidate.url,
             "keyword_matched": candidate.keyword_matched,
             "raw_text": candidate.raw_text,
+            "lat": candidate.lat,
+            "lon": candidate.lon,
             "score": score,
         }
         data = self._request("POST", "/api/leads/upsert", json=payload)
