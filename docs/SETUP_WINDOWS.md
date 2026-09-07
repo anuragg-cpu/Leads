@@ -60,13 +60,21 @@ packaging\build_exe.bat
 ```
 
 Output: `dist\Leads\Leads.exe`. Double-click it to open the CRM window
-(same as `abhayleads gui`), or run it from a terminal with subcommands:
+(same as `abhayleads gui`) - no console window opens alongside it - or
+run it from a terminal with subcommands, which prints normally in that
+terminal:
 
 ```
 dist\Leads\Leads.exe fetch
 dist\Leads\Leads.exe list --due
 dist\Leads\Leads.exe stats
 ```
+
+(One minor quirk of that: cmd/PowerShell treat a windowed exe as
+fire-and-forget, so the prompt can return a beat before a subcommand's
+output finishes printing - the output's still correct, just not always
+in sync with the prompt. Use `start /wait Leads.exe stats` if a script
+needs to wait for it.)
 
 You can copy the whole `dist\Leads\` folder anywhere (e.g. pin
 `Leads.exe` to your taskbar/Start menu) - it's self-contained and

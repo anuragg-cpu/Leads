@@ -66,7 +66,12 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
-    console=True,  # keep a console so `Leads.exe fetch` etc. print output
+    # Windowed, not console: double-clicking Leads.exe (opening the GUI)
+    # no longer flashes a black cmd window alongside it. launcher.py
+    # attaches to a parent console when there is one (i.e. run from an
+    # actual terminal), so `Leads.exe fetch`/`stats`/etc. still print -
+    # see its comment for the one rough edge that trade-off has.
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
 )
