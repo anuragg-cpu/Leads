@@ -11,6 +11,7 @@ from PyQt6.QtGui import QAction, QActionGroup, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QFileDialog,
     QHBoxLayout,
     QHeaderView,
     QInputDialog,
@@ -29,6 +30,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ..config import load_config
+from ..csv_import import import_csv
 from ..db_factory import open_db
 from ..mapview import leads_to_map_points, render_standalone_map_html
 from ..models import STAGES
@@ -126,6 +128,10 @@ class MainWindow(QMainWindow):
         edit_config_action = QAction("Edit Config (keywords, sources)...", self)
         edit_config_action.triggered.connect(self._edit_config)
         file_menu.addAction(edit_config_action)
+
+        import_csv_action = QAction("Import CSV...", self)
+        import_csv_action.triggered.connect(self._import_csv)
+        file_menu.addAction(import_csv_action)
 
         file_menu.addSeparator()
 
@@ -246,6 +252,30 @@ class MainWindow(QMainWindow):
             self._update_window_title()
             self.status_bar.showMessage("Config saved.", 5000)
             self.refresh()
+
+    def _import_csv(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Import CSV", "", "CSV files (*.csv);;All files (*)")
+        if not file_path:
+            return
+
+        try:
+            result = import_csv(self.db, Path(file_path))
+        except Exception as exc:  # noqa: BLE001 - surface any parse/IO failure to the user, not a crash
+            QMessageBox.critical(self, "Import failed", str(exc))
+            return
+
+        message = f"Imported {result.imported} lead(s) from {Path(file_path).name}."
+        if result.skipped:
+            message += f"\nSkipped {result.skipped} row(s) with no company/contact name."
+        if result.warnings:
+            shown = result.warnings[:10]
+            message += "\n\nWarnings:\n" + "\n".join(shown)
+            if len(result.warnings) > len(shown):
+                message += f"\n...and {len(result.warnings) - len(shown)} more."
+        QMessageBox.information(self, "Import complete", message)
+
+        self.status_bar.showMessage(f"Imported {result.imported} lead(s) from CSV.", 8000)
+        self.refresh()
 
     def _reset_leads(self):
         confirm = QMessageBox.question(

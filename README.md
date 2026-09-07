@@ -37,6 +37,7 @@ abhayleads stats                   pipeline summary
 abhayleads dedupe                  merge osm_places leads that are the same place mapped twice
 abhayleads reset                   delete ALL leads in the current profile to start over
 abhayleads add --company "Acme" --contact-name "Jane" --phone "..."   add a lead by hand
+abhayleads import-csv leads.csv    bulk-add leads from a CSV file, e.g. a curated dealer list (docs/SOURCES.md)
 abhayleads digest                  push a summary of what's new to your phone (docs/NOTIFICATIONS.md)
 abhayleads server-token             generate a token for `serve`/`remote_server` (docs/SERVER_SETUP.md)
 abhayleads serve                    run the HTTP server (JSON API + mobile web UI) for phone/desktop access
@@ -79,6 +80,12 @@ Found a lead some other way entirely (a phone call, a referral, a
 business card)? Click **Add Lead** in the toolbar (or `abhayleads add`
 from the CLI) to enter it directly - it goes straight into the same
 pipeline as everything else.
+
+Have a whole list already - a hand-curated dealer list, an export from
+another CRM/spreadsheet? **File -> Import CSV...** (or `abhayleads
+import-csv leads.csv` from the CLI) bulk-adds every row the same way,
+matching common column names automatically. See docs/SOURCES.md for the
+exact columns it recognizes.
 
 ### Viewing leads on a map
 

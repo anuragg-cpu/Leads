@@ -8,6 +8,8 @@ Examples:
     abhayleads show 42                     full detail for lead 42
     abhayleads update 42 --stage Contacted --notes "sent intro email" --follow-up 2026-09-03
     abhayleads add --company "Acme" --contact-name "Jane" --phone "+91..."  add a lead by hand
+    abhayleads import-csv dealers.csv      bulk-add leads from a CSV file (see docs/SOURCES.md)
+    abhayleads import-csv dealers.csv --dry-run   preview a CSV without writing anything
     abhayleads stats                       pipeline summary
     abhayleads dedupe                      merge osm_places leads mapped twice
     abhayleads reset                       delete ALL leads and start over
@@ -206,6 +208,26 @@ def cmd_add(args):
         db.update_lead(lead_id, stage=args.stage, notes=args.notes, next_follow_up=args.follow_up)
 
     print(f"Added lead #{lead_id}.")
+    db.close()
+
+
+def cmd_import_csv(args):
+    from .csv_import import import_csv
+
+    path = Path(args.csv_path)
+    if not path.exists():
+        print(f"No such file: {path}", file=sys.stderr)
+        sys.exit(1)
+
+    db = _get_db(args)
+    result = import_csv(db, path, dry_run=args.dry_run)
+
+    verb = "Would import" if args.dry_run else "Imported"
+    print(f"{verb} {result.imported} lead(s) from {path.name}.")
+    if result.skipped:
+        print(f"Skipped {result.skipped} row(s) with no company/contact name (lines: {', '.join(map(str, result.skipped_lines))}).")
+    for warning in result.warnings:
+        print(f"  warning: {warning}")
     db.close()
 
 
@@ -439,6 +461,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_add.add_argument("--notes")
     p_add.add_argument("--follow-up", help="ISO date, e.g. 2026-09-03")
     p_add.set_defaults(func=cmd_add)
+
+    p_import_csv = sub.add_parser(
+        "import-csv", help="Bulk-add leads from a CSV file (e.g. a curated dealer list, or another CRM's export)"
+    )
+    p_import_csv.add_argument("csv_path", help="Path to the CSV file")
+    p_import_csv.add_argument("--dry-run", action="store_true", help="Preview counts/warnings without writing anything")
+    p_import_csv.set_defaults(func=cmd_import_csv)
 
     p_stats = sub.add_parser("stats", help="Pipeline summary and last fetch run")
     p_stats.set_defaults(func=cmd_stats)
