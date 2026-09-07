@@ -1,6 +1,6 @@
 """Tests for the pure (non-network) parts of the osm_places source."""
 
-from abhayleads.sources.osm_places import OSMPlacesSource
+from abhayleads.sources.osm_places import CATEGORY_FILTERS, OSMPlacesSource
 
 
 def make_source(**overrides):
@@ -19,6 +19,20 @@ def test_label_for_falls_back_to_place_when_unmatched():
     source = make_source()
     label = source._label_for({"shop": "bakery"}, ["hospital"])
     assert label == "Place"
+
+
+def test_category_filters_include_security_dealer_for_cctv_alarm_shops():
+    # Channel partners (CCTV/alarm dealers), not end buyers - OSM's
+    # canonical tag for this kind of shop is shop=security.
+    assert CATEGORY_FILTERS["security_dealer"] == [
+        ("shop", "security", "Security equipment dealer (CCTV/alarm)")
+    ]
+
+
+def test_label_for_matches_security_dealer_category():
+    source = make_source(categories=["security_dealer"])
+    label = source._label_for({"shop": "security"}, ["security_dealer"])
+    assert label == "Security equipment dealer (CCTV/alarm)"
 
 
 def test_element_to_candidate_builds_expected_fields():
@@ -91,6 +105,33 @@ def test_element_to_candidate_skips_unnamed_places():
 def test_fetch_returns_empty_without_target_locations():
     source = OSMPlacesSource({"target_locations": []})
     assert list(source.fetch(keywords=[])) == []  # fetch() is a generator - must be consumed
+
+
+def test_fetch_warns_on_unknown_category_but_still_runs_the_valid_ones(tmp_path, monkeypatch):
+    # Regression test for a real support case: a typo'd/unrecognized
+    # category used to silently contribute zero leads with no error at
+    # all, making it look like the whole feature was broken rather than
+    # one config value.
+    monkeypatch.setattr(
+        "abhayleads.sources.osm_places.default_paths",
+        lambda: (tmp_path / "config", tmp_path),
+    )
+    monkeypatch.setattr("abhayleads.sources.osm_places.time.sleep", lambda *_: None)
+
+    source = OSMPlacesSource({"target_locations": ["Baner"], "categories": ["hospital", "cctv_dealer"]})
+    monkeypatch.setattr(source, "_geocode", lambda locality: {"lat": 1.0, "lon": 2.0})
+    monkeypatch.setattr(
+        source,
+        "_query_overpass",
+        lambda point, radius, categories: [
+            ({"type": "node", "id": 1, "tags": {"name": "Test Hospital"}}, "Hospital")
+        ],
+    )
+
+    candidates = list(source.fetch(keywords=[]))
+
+    assert len(candidates) == 1  # the valid "hospital" category still ran
+    assert any("unknown category" in w and "cctv_dealer" in w for w in source.warnings)
 
 
 def test_fetch_keeps_results_from_other_localities_when_one_fails(tmp_path, monkeypatch):

@@ -87,6 +87,10 @@ sources:
       - "coworking"
       - "campus"
       - "residential"
+      # - "security_dealer"  # CCTV/alarm dealers - a channel-partner
+      #                        search, not an end-buyer one; uncomment to
+      #                        include. Thinner OSM coverage than the
+      #                        categories above - see docs/SOURCES.md.
     radius_meters: 3000
     max_localities: 20
 

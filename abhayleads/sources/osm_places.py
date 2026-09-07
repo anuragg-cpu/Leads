@@ -66,6 +66,13 @@ CATEGORY_FILTERS: dict[str, list[tuple[str, str, str]]] = {
         ("amenity", "college", "College campus"),
     ],
     "residential": [("building", "apartments", "Housing society / apartment complex")],
+    # Channel partners, not end buyers: dealers/showrooms that sell CCTV,
+    # alarms, locks, safes - shop=security is OSM's canonical tag for
+    # this. Coverage will be thinner than the categories above - a lot of
+    # small dealers/system integrators operate out of an office with no
+    # public storefront and never get mapped at all - so treat this as a
+    # supplement, not a comprehensive directory. See docs/SOURCES.md.
+    "security_dealer": [("shop", "security", "Security equipment dealer (CCTV/alarm)")],
 }
 
 GEOCODE_CACHE_FILENAME = "osm_geocode_cache.json"
@@ -94,6 +101,15 @@ class OSMPlacesSource(BaseLeadSource):
             return
 
         categories = self.source_config.get("categories") or list(CATEGORY_FILTERS)
+        unknown_categories = [c for c in categories if c not in CATEGORY_FILTERS]
+        if unknown_categories:
+            # An unrecognized category contributes no Overpass query
+            # clauses - silently finding nothing, with no error - so this
+            # is the only signal a config typo actually happened.
+            self.warnings.append(
+                f"osm_places: unknown categor{'y' if len(unknown_categories) == 1 else 'ies'} "
+                f"{', '.join(unknown_categories)} in config.yaml (valid: {', '.join(CATEGORY_FILTERS)}) - ignored"
+            )
         radius = self.source_config.get("radius_meters", 3000)
         max_localities = self.source_config.get("max_localities", 20)
 
@@ -170,7 +186,12 @@ class OSMPlacesSource(BaseLeadSource):
         clauses = []
         for category in categories:
             for key, value, _label in CATEGORY_FILTERS.get(category, []):
-                name_filter = '["name"]' if category == "residential" else ""
+                # Skip unnamed elements server-side for categories where OSM
+                # has a lot of them (unnamed apartment buildings, unnamed
+                # security shops) - _element_to_candidate would discard
+                # these anyway (no name = no candidate), this just keeps
+                # the Overpass query itself smaller/faster.
+                name_filter = '["name"]' if category in ("residential", "security_dealer") else ""
                 clauses.append(
                     f'nwr["{key}"="{value}"]{name_filter}(around:{radius},{point["lat"]},{point["lon"]});'
                 )
