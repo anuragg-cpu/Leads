@@ -169,6 +169,35 @@ What to do about it, in order:
    credit but needs a billing account) - not done by default since you
    asked to stick to free/no-signup sources.
 
+## Bulk-add from a CSV file (`abhayleads import-csv`)
+
+For lead types no automated source can reach at all - a hand-curated
+dealer/integrator list, an export from another CRM or spreadsheet you
+already have. Not a source in the `sources:` config sense (nothing to
+enable/schedule) - just a one-off command:
+
+```
+abhayleads import-csv leads.csv            # bulk-add
+abhayleads import-csv leads.csv --dry-run  # preview counts/warnings first, writes nothing
+```
+
+Also available from the GUI: **File -> Import CSV...**.
+
+Column names are matched flexibly and case-insensitively - `company`,
+`Org/Society Name`, `Organization`, and a few others all map to the same
+field, so a real export from another tool usually works without editing
+its headers first. See `abhayleads/csv_import.py`'s `_COLUMN_ALIASES` for
+the exact list if a column isn't being picked up. At minimum a row needs
+a company or a contact name - anything else is optional and just gets
+folded in where it fits (address/city into the lead's notes text, a
+`Segment`/category column into the lead's title, etc.).
+
+If the file has an id column (`id`, `Lead ID`, `external_id`), re-running
+the same import later (e.g. a refreshed export from the other tool)
+updates the existing leads instead of creating duplicates - and never
+overwrites a stage/notes you've since edited here, same rule an automated
+re-fetch already follows.
+
 ## Government tender portals (not automated - here's why)
 
 Given Abhay is sold via procurement/tenders to hospitals, campuses, and
