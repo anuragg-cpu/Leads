@@ -34,6 +34,7 @@ from ..csv_import import import_csv
 from ..db_factory import open_db
 from ..mapview import leads_to_map_points, render_standalone_map_html
 from ..models import STAGES
+from ..remote_db import RemoteDatabaseError
 from ..profiles import (
     create_profile,
     delete_profile,
@@ -81,6 +82,11 @@ class MainWindow(QMainWindow):
         self.db = open_db(db_path, self.config)
         self.worker: Optional[FetchWorker] = None
         self._last_incremental_refresh = 0.0
+        # Only pop a modal for a db error the *first* time it happens -
+        # once the user's seen and dismissed it, further failures (e.g.
+        # a flaky connection during a fetch's throttled refreshes) just
+        # update the status bar instead of repeatedly interrupting them.
+        self._db_error_shown = False
 
         self.resize(1100, 650)
         self._update_window_title()
@@ -439,12 +445,35 @@ class MainWindow(QMainWindow):
 
     def refresh(self):
         stage = self.stage_filter.currentText()
-        leads = self.db.list_leads(
-            stage=None if stage == "All" else stage,
-            min_score=self.min_score.value(),
-            due_only=self.due_only.isChecked(),
-            search=self.search_box.text() or None,
-        )
+        try:
+            leads = self.db.list_leads(
+                stage=None if stage == "All" else stage,
+                min_score=self.min_score.value(),
+                due_only=self.due_only.isChecked(),
+                search=self.search_box.text() or None,
+            )
+        except (RemoteDatabaseError, OSError) as exc:
+            # Never let a temporarily-unreachable server (or a local db
+            # file problem) crash the whole window - this used to be
+            # unhandled, so a server hiccup at startup (e.g. Tailscale
+            # Funnel briefly down) meant the app wouldn't even open.
+            # Leave whatever the table already showed untouched rather
+            # than blanking it out over a possibly-transient failure.
+            self.status_bar.showMessage(f"Couldn't load leads: {exc}", 15000)
+            if not self._db_error_shown:
+                self._db_error_shown = True
+                QMessageBox.critical(
+                    self,
+                    "Couldn't load leads",
+                    f"{exc}\n\n"
+                    "The window will still open, but leads can't be shown until this "
+                    "is resolved. If this profile points at a shared server "
+                    "(File -> Edit Config -> remote_server), check that it's running "
+                    "and reachable; otherwise this may be a temporary network issue.",
+                )
+            return
+
+        self._db_error_shown = False  # a later failure is a new event, worth its own modal
 
         # Sorting must be off while repopulating - otherwise Qt re-sorts
         # the table after every single setItem() call, which reorders rows
@@ -470,11 +499,16 @@ class MainWindow(QMainWindow):
                 self.table.setItem(row_idx, col_idx, item)
         self.table.setSortingEnabled(True)
 
-        stats = self.db.stats()
-        self.status_bar.showMessage(
-            f"{stats['total']} total leads | {stats['due_for_follow_up']} due for follow-up | "
-            f"showing {len(leads)}"
-        )
+        try:
+            stats = self.db.stats()
+            self.status_bar.showMessage(
+                f"{stats['total']} total leads | {stats['due_for_follow_up']} due for follow-up | "
+                f"showing {len(leads)}"
+            )
+        except (RemoteDatabaseError, OSError) as exc:
+            # The table itself already loaded fine above - just degrade
+            # the summary line rather than losing the leads just shown.
+            self.status_bar.showMessage(f"Showing {len(leads)} lead(s) (stats unavailable: {exc})", 15000)
 
     def _open_selected_lead(self):
         row = self.table.currentRow()
