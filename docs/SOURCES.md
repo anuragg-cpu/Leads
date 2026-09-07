@@ -93,6 +93,20 @@ product sold to a specific kind of physical place in a specific area
 (e.g. a hardware install business), where the buyer isn't out there
 publicly posting about the problem.
 
+**Categories are end buyers by default, not channel partners.** If
+you're after system integrators or CCTV/alarm dealers to sell *through*
+rather than *to*, add `security_dealer` to `categories` - it searches
+OSM's `shop=security` tag (its standard tag for security-equipment
+shops: CCTV, alarms, locks, safes). Coverage will be noticeably thinner
+than the other categories, though - a lot of small dealers and system
+integrators operate out of an office with no public storefront and
+never get mapped on OSM at all, so this finds the subset that has a
+mapped shopfront, not a comprehensive directory. If you edited
+`categories` yourself and got zero new leads, check the exact spelling
+against the keys in `CATEGORY_FILTERS` in `osm_places.py` - an unknown
+category name is silently ignored rather than erroring (it contributes
+no Overpass query clauses, so it just finds nothing, with no warning).
+
 Two free APIs, no key needed:
 - **Nominatim** turns each locality name into coordinates, capped at
   1 request/second and cached to disk after the first run.
