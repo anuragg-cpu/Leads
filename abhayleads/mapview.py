@@ -88,9 +88,13 @@ _MAP_BODY_TEMPLATE = Template("""<link rel="stylesheet" href="https://unpkg.com/
   var leadUrlBase = $lead_url_base_json;
 
   var map = L.map('leads-map');
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  // Esri's free World Street Map tiles - no API key/signup needed
+  // (unlike Google Maps), and visually closer to it than plain OSM
+  // tiles: labeled roads, route shields, similar color palette.
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
     maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, ' +
+      'Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom'
   }).addTo(map);
 
   var stageColors = $stage_colors_json;

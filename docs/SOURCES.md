@@ -198,6 +198,34 @@ updates the existing leads instead of creating duplicates - and never
 overwrites a stage/notes you've since edited here, same rule an automated
 re-fetch already follows.
 
+## Adding a single lead from a Google Maps link
+
+For a place/vendor you found by manually searching Google Maps yourself -
+`security_dealer`'s thin OSM coverage (above) is exactly the case this is
+for. In the GUI's **Add Lead** dialog, paste a Google Maps link into the
+box at the top and click **Fetch** - it pre-fills the company name and
+coordinates when it can read them out of the link. From the CLI:
+
+```
+abhayleads add --google-maps-link "https://maps.app.goo.gl/..." --phone "..." --notes "..."
+```
+(An explicit `--company` always wins over what's parsed from the link.)
+
+Works best with a **full place link** - open the place on Google Maps,
+then Share -> Copy link - since Google encodes the name and exact
+coordinates directly in that URL. A shortened share link
+(`maps.app.goo.gl/...`) is followed to its real destination first, so
+either kind works the same way. A plain search-results link or one with
+only `?cid=...` in it has nothing readable encoded in the URL itself, so
+you'll just need to fill in the company name yourself in that case - a
+message says so rather than silently adding a nameless lead.
+
+This deliberately never fetches the actual Google Maps page - only the
+one redirect needed to resolve a shortened link, then plain URL parsing.
+Scraping Google Maps' page content itself would violate its terms of
+service, which this tool doesn't do (same principle behind every other
+source here - see "Government tender portals" below for another example).
+
 ## Government tender portals (not automated - here's why)
 
 Given Abhay is sold via procurement/tenders to hospitals, campuses, and
