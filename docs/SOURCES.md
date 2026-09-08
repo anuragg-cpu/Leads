@@ -202,14 +202,27 @@ re-fetch already follows.
 
 For a place/vendor you found by manually searching Google Maps yourself -
 `security_dealer`'s thin OSM coverage (above) is exactly the case this is
-for. In the GUI's **Add Lead** dialog, paste a Google Maps link into the
-box at the top and click **Fetch** - it pre-fills the company name and
-coordinates when it can read them out of the link. From the CLI:
+for. Works both for a brand-new lead and for backfilling a location onto
+one you already have (e.g. a CSV import or manually-added lead with no
+coordinates yet, so it doesn't show up on the map).
 
+**New lead**: in the GUI's **Add Lead** dialog, paste a Google Maps link
+into the box at the top and click **Fetch** - it pre-fills the company
+name and coordinates when it can read them out of the link.
 ```
 abhayleads add --google-maps-link "https://maps.app.goo.gl/..." --phone "..." --notes "..."
 ```
 (An explicit `--company` always wins over what's parsed from the link.)
+
+**Existing lead**: open it (double-click a row) and the same paste-a-link
+box is at the top of that dialog too - click **Fetch** to set/update its
+location, shown just below as `Location: <lat>, <lon>`. This never
+overwrites a company name or URL the lead already has - only fields that
+are still blank get filled in from the link, so it's safe to use purely
+to add a missing location without touching anything else.
+```
+abhayleads update 42 --google-maps-link "https://maps.app.goo.gl/..."
+```
 
 Works best with a **full place link** - open the place on Google Maps,
 then Share -> Copy link - since Google encodes the name and exact

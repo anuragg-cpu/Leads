@@ -71,6 +71,8 @@ class UpdateLeadBody(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     url: Optional[str] = None
+    lat: Optional[float] = None
+    lon: Optional[float] = None
 
 
 class ResetBody(BaseModel):
@@ -246,6 +248,8 @@ def create_app(db_path: Path, config: dict[str, Any]) -> FastAPI:
                 email=body.email,
                 phone=body.phone,
                 url=body.url,
+                lat=body.lat,
+                lon=body.lon,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

@@ -88,6 +88,23 @@ def test_api_lead_crud_roundtrip(client):
     assert resp.status_code == 404
 
 
+def test_api_update_lead_can_backfill_coordinates(client):
+    resp = client.post(
+        "/api/leads/upsert",
+        headers=auth_headers(),
+        json={"source": "manual", "source_detail": "s1", "company": "No Location Co", "score": 10},
+    )
+    lead_id = resp.json()["id"]
+    assert client.get(f"/api/leads/{lead_id}", headers=auth_headers()).json()["lat"] is None
+
+    resp = client.patch(f"/api/leads/{lead_id}", headers=auth_headers(), json={"lat": 18.5308, "lon": 73.8747})
+    assert resp.status_code == 200
+
+    lead = client.get(f"/api/leads/{lead_id}", headers=auth_headers()).json()
+    assert lead["lat"] == 18.5308
+    assert lead["lon"] == 73.8747
+
+
 def test_api_list_leads_and_stats(client):
     client.post(
         "/api/leads/upsert",

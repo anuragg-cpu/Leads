@@ -7,6 +7,7 @@ Examples:
     abhayleads list --due                  leads due for follow-up
     abhayleads show 42                     full detail for lead 42
     abhayleads update 42 --stage Contacted --notes "sent intro email" --follow-up 2026-09-03
+    abhayleads update 42 --google-maps-link "https://maps.app.goo.gl/..."  add/update lead 42's location
     abhayleads add --company "Acme" --contact-name "Jane" --phone "+91..."  add a lead by hand
     abhayleads add --google-maps-link "https://maps.app.goo.gl/..."  add a lead from a pasted Google Maps link
     abhayleads import-csv dealers.csv      bulk-add leads from a CSV file (see docs/SOURCES.md)
@@ -161,6 +162,27 @@ def cmd_show(args):
 
 def cmd_update(args):
     db = _get_db(args)
+    company = args.company
+    lat = lon = None
+
+    if args.google_maps_link:
+        from .google_maps_link import parse_google_maps_link
+
+        parsed = parse_google_maps_link(args.google_maps_link)
+        lat, lon = parsed.lat, parsed.lon
+        # Never overwrite a company name this lead already has - the link
+        # is here to backfill what's missing, same rule the GUI's edit
+        # dialog follows.
+        if company is None and parsed.company:
+            existing = db.get_lead(args.lead_id)
+            if existing is not None and not (existing["company"] or "").strip():
+                company = parsed.company
+        if not parsed.company and lat is None:
+            print(
+                "Warning: no place name or coordinates found in that Google Maps link.",
+                file=sys.stderr,
+            )
+
     try:
         db.update_lead(
             args.lead_id,
@@ -168,10 +190,12 @@ def cmd_update(args):
             notes=args.notes,
             next_follow_up=args.follow_up,
             clear_follow_up=args.clear_follow_up,
-            company=args.company,
+            company=company,
             contact_name=args.contact_name,
             email=args.email,
             phone=args.phone,
+            lat=lat,
+            lon=lon,
         )
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
@@ -470,6 +494,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_update.add_argument("--contact-name")
     p_update.add_argument("--email")
     p_update.add_argument("--phone")
+    p_update.add_argument(
+        "--google-maps-link",
+        help="Add/update this lead's location from a Google Maps link (also backfills --company "
+        "if it's currently blank). See docs/SOURCES.md.",
+    )
     p_update.set_defaults(func=cmd_update)
 
     p_add = sub.add_parser("add", help="Add a lead by hand (not from an automated source)")

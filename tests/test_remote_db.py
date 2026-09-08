@@ -134,6 +134,16 @@ def test_update_lead_sends_all_fields(monkeypatch):
     assert kwargs["json"]["stage"] == "Contacted"
     assert kwargs["json"]["notes"] == "called"
     assert kwargs["json"]["company"] is None
+    assert kwargs["json"]["lat"] is None
+    assert kwargs["json"]["lon"] is None
+
+
+def test_update_lead_sends_coordinates_when_given(monkeypatch):
+    db, fake = make_db(monkeypatch, {("PATCH", "http://example.com/api/leads/5"): FakeResponse(200, {"ok": True})})
+    db.update_lead(5, lat=18.5308, lon=73.8747)
+    _, _, kwargs = fake.calls[0]
+    assert kwargs["json"]["lat"] == 18.5308
+    assert kwargs["json"]["lon"] == 73.8747
 
 
 def test_delete_all_leads_returns_removed_count(monkeypatch):

@@ -202,6 +202,38 @@ def test_update_lead_contact_fields_default_to_untouched(db):
     assert lead["company"] == "Original"  # untouched when not passed
 
 
+def test_update_lead_can_backfill_coordinates(db):
+    # e.g. a manually-added or CSV-imported lead with no location, later
+    # given one via a pasted Google Maps link.
+    lead_id, _ = db.upsert_candidate(make_candidate(company="No Location Co"), score=50)
+    assert db.get_lead(lead_id)["lat"] is None
+
+    db.update_lead(lead_id, lat=18.5308, lon=73.8747)
+
+    lead = db.get_lead(lead_id)
+    assert lead["lat"] == 18.5308
+    assert lead["lon"] == 73.8747
+
+
+def test_update_lead_leaves_coordinates_untouched_when_not_passed(db):
+    lead_id, _ = db.upsert_candidate(make_candidate(company="Has Location", lat=1.0, lon=2.0), score=50)
+    db.update_lead(lead_id, notes="just a note")
+
+    lead = db.get_lead(lead_id)
+    assert lead["lat"] == 1.0
+    assert lead["lon"] == 2.0
+
+
+def test_update_lead_ignores_a_lone_lat_or_lon_without_its_pair(db):
+    lead_id, _ = db.upsert_candidate(make_candidate(company="Test"), score=50)
+
+    db.update_lead(lead_id, lat=18.5308)  # lon missing - not a meaningful point on its own
+
+    lead = db.get_lead(lead_id)
+    assert lead["lat"] is None
+    assert lead["lon"] is None
+
+
 def test_delete_all_leads_wipes_leads_history_and_runs(db):
     id1, _ = db.upsert_candidate(make_candidate(source_detail="a"), score=10)
     db.upsert_candidate(make_candidate(source_detail="b"), score=20)
