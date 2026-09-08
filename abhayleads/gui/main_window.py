@@ -305,6 +305,15 @@ class MainWindow(QMainWindow):
             self.refresh()
 
     def _show_map(self):
+        # If a personal Google Maps list is configured, that takes over
+        # entirely - simpler to reason about than trying to merge it
+        # with this app's own leads map.
+        google_maps_list_url = self.config.get("google_maps_list_url", "")
+        if google_maps_list_url:
+            webbrowser.open(google_maps_list_url)
+            self.status_bar.showMessage("Opened your Google Maps list in your browser.", 8000)
+            return
+
         # PyQt6 has no bundled web view here (that's QtWebEngine, a heavy
         # extra dependency this app doesn't otherwise need), so the map
         # opens in the user's normal browser instead - a self-contained

@@ -147,3 +147,10 @@ server:
 remote_server:
   base_url: ""
   token: ""
+
+# If you keep your own curated list of places on Google Maps (Saved ->
+# a named list -> Share -> Copy link) and would rather the "Map" button
+# open that directly than this app's own leads map, paste its link here.
+# Leave blank (the default) to keep the Map button showing this app's
+# own map of leads that have a location - see docs/SOURCES.md.
+google_maps_list_url: ""

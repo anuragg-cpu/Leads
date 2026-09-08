@@ -61,6 +61,21 @@ def parse_google_maps_link(url: str) -> ParsedGoogleMapsLink:
     return ParsedGoogleMapsLink(url=resolved_url, company=company, lat=lat, lon=lon)
 
 
+def split_links(text: str) -> list[str]:
+    """Splits a paste-box's worth of text into individual URLs, one per
+    line (or separated by other whitespace) - for pasting several links
+    at once (e.g. copied one-by-one out of a Google Maps list) instead of
+    just one. Ignores blank lines and anything that isn't a URL; keeps
+    first-seen order and drops exact duplicates."""
+    seen: set[str] = set()
+    links: list[str] = []
+    for token in text.split():
+        if token.startswith(("http://", "https://")) and token not in seen:
+            seen.add(token)
+            links.append(token)
+    return links
+
+
 def _resolve_redirect(url: str) -> str:
     """Follows the redirect chain to turn a shortened share link into
     Google's own long-form URL. An already-long URL just comes back

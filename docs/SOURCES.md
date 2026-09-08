@@ -198,7 +198,7 @@ updates the existing leads instead of creating duplicates - and never
 overwrites a stage/notes you've since edited here, same rule an automated
 re-fetch already follows.
 
-## Adding a single lead from a Google Maps link
+## Adding leads from a Google Maps link
 
 For a place/vendor you found by manually searching Google Maps yourself -
 `security_dealer`'s thin OSM coverage (above) is exactly the case this is
@@ -206,13 +206,21 @@ for. Works both for a brand-new lead and for backfilling a location onto
 one you already have (e.g. a CSV import or manually-added lead with no
 coordinates yet, so it doesn't show up on the map).
 
-**New lead**: in the GUI's **Add Lead** dialog, paste a Google Maps link
-into the box at the top and click **Fetch** - it pre-fills the company
-name and coordinates when it can read them out of the link.
+**New lead(s)**: in the GUI's **Add Lead** dialog, paste a Google Maps
+link into the box at the top and click **Fetch** - it pre-fills the
+company name and coordinates when it can read them out of the link.
+Paste several links at once (one per line) to add them all as separate
+leads in one go - useful for going through a batch of places you've
+found, e.g. from a Google Maps list (see below for why the list link
+itself can't just be imported directly).
 ```
 abhayleads add --google-maps-link "https://maps.app.goo.gl/..." --phone "..." --notes "..."
+abhayleads add --google-maps-link "https://maps.app.goo.gl/aaa" --google-maps-link "https://maps.app.goo.gl/bbb"
 ```
-(An explicit `--company` always wins over what's parsed from the link.)
+(An explicit `--company` always wins over what's parsed from the link;
+with more than one `--google-maps-link`, `--company`/`--contact-name`/etc.
+are ignored since they can't apply to more than one place - only
+`--stage`/`--notes`/`--follow-up` carry over to all of them.)
 
 **Existing lead**: open it (double-click a row) and the same paste-a-link
 box is at the top of that dialog too - click **Fetch** to set/update its
@@ -232,6 +240,35 @@ either kind works the same way. A plain search-results link or one with
 only `?cid=...` in it has nothing readable encoded in the URL itself, so
 you'll just need to fill in the company name yourself in that case - a
 message says so rather than silently adding a nameless lead.
+
+### Why a Google Maps *list* link can't be auto-imported
+
+A shared link to a Google Maps **list** (Saved -> a named list -> Share)
+is different from a single place link - it only encodes an internal list
+ID (`...!2s<list-id>!3e3`), not the places in it. Those only exist in
+Google's backend and load into the page via JavaScript after it opens.
+Reading them would mean running a full browser to execute that
+JavaScript, or reverse-engineering Google's internal API for it - both
+mean scraping Google Maps' actual content, which its terms of service
+prohibit (confirmed by `google.com/robots.txt`, which disallows crawling
+`/maps/` broadly). This tool doesn't do that, same as everywhere else in
+this project. The practical workaround: open each place from within
+your list, copy its individual link (Share -> Copy link, not the list's
+own share link), and paste them in together - see the bulk-add above.
+
+### Point the "Map" button at your own Google Maps list instead
+
+If you keep a personal curated list of places on Google Maps and would
+rather **Map** open that than this app's own leads map, set
+`google_maps_list_url` in `config.yaml` to that list's share link:
+```yaml
+google_maps_list_url: "https://maps.app.goo.gl/..."
+```
+With this set, **Map** (in both the GUI and the server's web UI) opens
+that link in your browser instead of this app's own map page. Leave it
+blank (the default) to keep the built-in leads map - the `/map` page
+itself still works either way, it's just not linked from the nav when a
+list URL is configured.
 
 This deliberately never fetches the actual Google Maps page - only the
 one redirect needed to resolve a shortened link, then plain URL parsing.

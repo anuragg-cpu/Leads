@@ -255,6 +255,27 @@ def test_map_requires_login(client):
     assert resp.headers["location"].startswith("/login")
 
 
+def test_nav_map_link_points_at_internal_map_by_default(client):
+    client.cookies.set("session_token", TOKEN)
+    resp = client.get("/")
+    assert '<a href="/map">Map</a>' in resp.text
+
+
+def test_nav_map_link_points_at_configured_google_maps_list_instead():
+    list_url = "https://maps.app.goo.gl/vypkfBUvNL5cLvLT8"
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = Path(tmp) / "test.db"
+        app = create_app(db_path, {"server": {"token": TOKEN}, "google_maps_list_url": list_url})
+        list_client = TestClient(app)
+        list_client.cookies.set("session_token", TOKEN)
+
+        resp = list_client.get("/")
+        assert f'<a href="{list_url}" target="_blank" rel="noopener">Map</a>' in resp.text
+        assert '<a href="/map">Map</a>' not in resp.text
+        # the internal /map route itself still works even when unlinked
+        assert list_client.get("/map").status_code == 200
+
+
 def test_map_page_empty_state_when_no_leads_have_coordinates(client):
     client.cookies.set("session_token", TOKEN)
     client.post(

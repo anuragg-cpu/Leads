@@ -24,7 +24,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ..db import Database
-from ..google_maps_link import parse_google_maps_link
+from ..google_maps_link import parse_google_maps_link, split_links
 from ..models import STAGES, LeadCandidate
 from ..remote_db import RemoteDatabase
 
@@ -41,9 +41,14 @@ class AddLeadDialog(QDialog):
 
         layout = QVBoxLayout(self)
 
+        layout.addWidget(QLabel("Google Maps link(s) - one per line to add several places at once:"))
         gmaps_row = QHBoxLayout()
-        self.gmaps_link_edit = QLineEdit()
-        self.gmaps_link_edit.setPlaceholderText("Paste a Google Maps link for the place (optional)...")
+        self.gmaps_link_edit = QPlainTextEdit()
+        self.gmaps_link_edit.setPlaceholderText(
+            "Paste a Google Maps link for the place (optional)...\n"
+            "Paste several, one per line, to add them all as separate leads at once."
+        )
+        self.gmaps_link_edit.setMaximumHeight(70)
         gmaps_row.addWidget(self.gmaps_link_edit, stretch=1)
         gmaps_fetch_button = QPushButton("Fetch")
         gmaps_fetch_button.clicked.connect(self._fetch_from_google_maps_link)
@@ -96,13 +101,17 @@ class AddLeadDialog(QDialog):
         self.company_edit.setFocus()
 
     def _fetch_from_google_maps_link(self):
-        link = self.gmaps_link_edit.text().strip()
-        if not link:
+        links = split_links(self.gmaps_link_edit.toPlainText())
+        if not links:
+            return
+
+        if len(links) > 1:
+            self._bulk_add_from_links(links)
             return
 
         self.setCursor(Qt.CursorShape.WaitCursor)
         try:
-            parsed = parse_google_maps_link(link)
+            parsed = parse_google_maps_link(links[0])
         finally:
             self.unsetCursor()
 
@@ -122,6 +131,57 @@ class AddLeadDialog(QDialog):
         if not self.url_edit.text().strip():
             self.url_edit.setText(parsed.url)
         self._lat, self._lon = parsed.lat, parsed.lon
+
+    def _bulk_add_from_links(self, links: list[str]):
+        """Several links pasted at once - each becomes its own lead
+        immediately (there's no single Company/Contact for the rest of
+        this form to apply to N different places), sharing whatever
+        Stage/Notes/follow-up is currently set in the form. Unlike the
+        single-link case, this commits right away rather than waiting
+        for Save, since there's nothing left on this form for the user
+        to fill in per-lead."""
+        stage = self.stage_combo.currentText()
+        notes = self.notes_edit.toPlainText()
+        follow_up = self.follow_up_edit.date().toString("yyyy-MM-dd") if self.follow_up_check.isChecked() else None
+
+        self.setCursor(Qt.CursorShape.WaitCursor)
+        added, skipped = 0, []
+        try:
+            for link in links:
+                parsed = parse_google_maps_link(link)
+                if not parsed.company and parsed.lat is None:
+                    skipped.append(link)
+                    continue
+
+                candidate = LeadCandidate(
+                    source="manual",
+                    source_detail=f"manual-{uuid.uuid4().hex}",
+                    company=parsed.company,
+                    url=parsed.url,
+                    raw_text="Added by hand from a pasted Google Maps link.",
+                    lat=parsed.lat,
+                    lon=parsed.lon,
+                )
+                lead_id, _ = self.db.upsert_candidate(candidate, score=0)
+                if stage != "New" or notes or follow_up:
+                    self.db.update_lead(
+                        lead_id, stage=stage, notes=notes, next_follow_up=follow_up, clear_follow_up=follow_up is None
+                    )
+                added += 1
+        finally:
+            self.unsetCursor()
+
+        message = f"Added {added} lead(s) from {len(links)} link(s)."
+        if skipped:
+            message += (
+                f"\n\n{len(skipped)} link(s) had no name or coordinates and were skipped "
+                "(works best with a full place link - open the place, then Share -> Copy link):\n"
+                + "\n".join(skipped)
+            )
+        QMessageBox.information(self, "Bulk add complete", message)
+
+        if added:
+            self.accept()
 
     def _save(self):
         company = self.company_edit.text().strip()

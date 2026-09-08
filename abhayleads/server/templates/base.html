@@ -10,7 +10,11 @@
 <nav class="topnav">
   <a href="/" class="brand">Abhay Leads</a>
   <a href="/leads/new">+ Add</a>
-  <a href="/map">Map</a>
+  {% if google_maps_list_url %}
+    <a href="{{ google_maps_list_url }}" target="_blank" rel="noopener">Map</a>
+  {% else %}
+    <a href="/map">Map</a>
+  {% endif %}
   <a href="/fetch">Fetch</a>
   <a href="/tools">Tools</a>
   <form method="post" action="/logout" class="logout-form"><button type="submit">Log out</button></form>
