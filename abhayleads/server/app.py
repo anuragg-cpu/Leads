@@ -149,6 +149,11 @@ def create_app(db_path: Path, config: dict[str, Any]) -> FastAPI:
     if STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+    # Global rather than passed per-route: base.html's nav (extended by
+    # every page) needs this to decide what the "Map" link points at,
+    # and threading it through every route's own context dict would be
+    # easy to miss on a new page.
+    templates.env.globals["google_maps_list_url"] = config.get("google_maps_list_url", "") or ""
     fetch_job = FetchJob()
 
     def get_db():

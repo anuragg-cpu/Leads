@@ -207,15 +207,21 @@ def cmd_update(args):
 
 def cmd_add(args):
     db = _get_db(args)
+    links = args.google_maps_link or []
+
+    if len(links) > 1:
+        _cmd_add_bulk_from_links(db, args, links)
+        return
+
     company = (args.company or "").strip()
     contact = (args.contact_name or "").strip()
     url = args.url or ""
     lat = lon = None
 
-    if args.google_maps_link:
+    if links:
         from .google_maps_link import parse_google_maps_link
 
-        parsed = parse_google_maps_link(args.google_maps_link)
+        parsed = parse_google_maps_link(links[0])
         if not company and parsed.company:
             company = parsed.company
         if not url:
@@ -254,6 +260,45 @@ def cmd_add(args):
         db.update_lead(lead_id, stage=args.stage, notes=args.notes, next_follow_up=args.follow_up)
 
     print(f"Added lead #{lead_id}.")
+    db.close()
+
+
+def _cmd_add_bulk_from_links(db, args, links):
+    """Several --google-maps-link flags at once - each becomes its own
+    lead (there's no single --company for N different places), sharing
+    whatever --stage/--notes/--follow-up was passed."""
+    from .google_maps_link import parse_google_maps_link
+
+    added, skipped = 0, []
+    for link in links:
+        parsed = parse_google_maps_link(link)
+        if not parsed.company and parsed.lat is None:
+            skipped.append(link)
+            continue
+
+        candidate = LeadCandidate(
+            source="manual",
+            source_detail=f"manual-{uuid.uuid4().hex}",
+            company=parsed.company,
+            url=parsed.url,
+            raw_text="Added by hand from a pasted Google Maps link.",
+            lat=parsed.lat,
+            lon=parsed.lon,
+        )
+        lead_id, _ = db.upsert_candidate(candidate, score=0)
+        if args.stage != "New" or args.notes or args.follow_up:
+            db.update_lead(lead_id, stage=args.stage, notes=args.notes, next_follow_up=args.follow_up)
+        added += 1
+
+    print(f"Added {added} lead(s) from {len(links)} link(s).")
+    if skipped:
+        print(
+            f"{len(skipped)} link(s) had no name or coordinates and were skipped "
+            "(works best with a full place link - open the place, then Share -> Copy link):",
+            file=sys.stderr,
+        )
+        for link in skipped:
+            print(f"  {link}", file=sys.stderr)
     db.close()
 
 
@@ -504,8 +549,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_add = sub.add_parser("add", help="Add a lead by hand (not from an automated source)")
     p_add.add_argument(
         "--google-maps-link",
+        action="append",
         help="A Google Maps link for the place - pre-fills --company/coordinates from it "
-        "when possible (an explicit --company still wins). See docs/SOURCES.md.",
+        "when possible (an explicit --company still wins). Repeat this flag to add several "
+        "places at once, each as its own lead sharing --stage/--notes/--follow-up. "
+        "See docs/SOURCES.md.",
     )
     p_add.add_argument("--company")
     p_add.add_argument("--contact-name")

@@ -1,11 +1,39 @@
 import requests
 
-from abhayleads.google_maps_link import parse_google_maps_link
+from abhayleads.google_maps_link import parse_google_maps_link, split_links
 
 
 class FakeResponse:
     def __init__(self, url):
         self.url = url
+
+
+def test_split_links_one_per_line():
+    text = "https://maps.app.goo.gl/aaa\nhttps://maps.app.goo.gl/bbb\nhttps://maps.app.goo.gl/ccc"
+    assert split_links(text) == [
+        "https://maps.app.goo.gl/aaa",
+        "https://maps.app.goo.gl/bbb",
+        "https://maps.app.goo.gl/ccc",
+    ]
+
+
+def test_split_links_ignores_blank_lines_and_non_urls():
+    text = "https://maps.app.goo.gl/aaa\n\nnot a url\n   \nhttps://maps.app.goo.gl/bbb"
+    assert split_links(text) == ["https://maps.app.goo.gl/aaa", "https://maps.app.goo.gl/bbb"]
+
+
+def test_split_links_drops_exact_duplicates_keeping_first_order():
+    text = "https://maps.app.goo.gl/aaa\nhttps://maps.app.goo.gl/bbb\nhttps://maps.app.goo.gl/aaa"
+    assert split_links(text) == ["https://maps.app.goo.gl/aaa", "https://maps.app.goo.gl/bbb"]
+
+
+def test_split_links_single_link_returns_one_item_list():
+    assert split_links("  https://maps.app.goo.gl/aaa  ") == ["https://maps.app.goo.gl/aaa"]
+
+
+def test_split_links_empty_text_returns_empty_list():
+    assert split_links("") == []
+    assert split_links("   \n  \n") == []
 
 
 def test_extracts_company_and_precise_point_when_present(monkeypatch):

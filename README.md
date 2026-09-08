@@ -84,12 +84,15 @@ pipeline as everything else.
 Found a place by manually searching Google Maps? Paste its Google Maps
 link into the box at the top of **Add Lead** and click **Fetch** - it
 pre-fills the company name and coordinates from the link (`abhayleads add
---google-maps-link "..."` does the same from the CLI). The same box is
-also at the top of a lead's edit screen, so you can add or update a
-location on a lead you already have (e.g. one missing coordinates after a
-CSV import) without touching its other fields - `abhayleads update 42
+--google-maps-link "..."` does the same from the CLI). Paste several
+links at once (one per line, or repeat `--google-maps-link` on the CLI)
+to add them all as separate leads in one go. The same box is also at the
+top of a lead's edit screen, so you can add or update a location on a
+lead you already have (e.g. one missing coordinates after a CSV import)
+without touching its other fields - `abhayleads update 42
 --google-maps-link "..."` does that from the CLI. See docs/SOURCES.md for
-what kind of link works best.
+what kind of link works best, and why a Google Maps *list* link needs a
+different approach (bulk-pasting the individual place links from it).
 
 Have a whole list already - a hand-curated dealer list, an export from
 another CRM/spreadsheet? **File -> Import CSV...** (or `abhayleads
@@ -110,6 +113,11 @@ in local-only mode the popup is just the summary, since there's no web
 server to link to. `abhayleads serve`'s own web UI has the same map at
 `/map` - see "Accessing leads from your phone/desktop over the internet"
 below.
+
+Prefer to use your own curated Google Maps list instead? Set
+`google_maps_list_url` in `config.yaml` to that list's share link and
+**Map** opens it directly (both here and in the server's web UI) instead
+of this built-in map. See docs/SOURCES.md.
 
 ### Stopping a fetch early
 
