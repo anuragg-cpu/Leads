@@ -81,6 +81,12 @@ business card)? Click **Add Lead** in the toolbar (or `abhayleads add`
 from the CLI) to enter it directly - it goes straight into the same
 pipeline as everything else.
 
+Found a place by manually searching Google Maps? Paste its Google Maps
+link into the box at the top of **Add Lead** and click **Fetch** - it
+pre-fills the company name and coordinates from the link (`abhayleads add
+--google-maps-link "..."` does the same from the CLI). See docs/SOURCES.md
+for what kind of link works best.
+
 Have a whole list already - a hand-curated dealer list, an export from
 another CRM/spreadsheet? **File -> Import CSV...** (or `abhayleads
 import-csv leads.csv` from the CLI) bulk-adds every row the same way,

@@ -8,6 +8,7 @@ Examples:
     abhayleads show 42                     full detail for lead 42
     abhayleads update 42 --stage Contacted --notes "sent intro email" --follow-up 2026-09-03
     abhayleads add --company "Acme" --contact-name "Jane" --phone "+91..."  add a lead by hand
+    abhayleads add --google-maps-link "https://maps.app.goo.gl/..."  add a lead from a pasted Google Maps link
     abhayleads import-csv dealers.csv      bulk-add leads from a CSV file (see docs/SOURCES.md)
     abhayleads import-csv dealers.csv --dry-run   preview a CSV without writing anything
     abhayleads stats                       pipeline summary
@@ -184,8 +185,27 @@ def cmd_add(args):
     db = _get_db(args)
     company = (args.company or "").strip()
     contact = (args.contact_name or "").strip()
+    url = args.url or ""
+    lat = lon = None
+
+    if args.google_maps_link:
+        from .google_maps_link import parse_google_maps_link
+
+        parsed = parse_google_maps_link(args.google_maps_link)
+        if not company and parsed.company:
+            company = parsed.company
+        if not url:
+            url = parsed.url
+        lat, lon = parsed.lat, parsed.lon
+        if not parsed.company and lat is None:
+            print(
+                "Warning: no place name or coordinates found in that Google Maps link - "
+                "works best with a full place link (open the place, then Share -> Copy link).",
+                file=sys.stderr,
+            )
+
     if not company and not contact:
-        print("Provide at least --company or --contact-name.", file=sys.stderr)
+        print("Provide at least --company or --contact-name (or a --google-maps-link with a name in it).", file=sys.stderr)
         db.close()
         sys.exit(1)
 
@@ -199,8 +219,10 @@ def cmd_add(args):
         title=args.title or "",
         email=args.email or "",
         phone=args.phone or "",
-        url=args.url or "",
+        url=url,
         raw_text="Added by hand.",
+        lat=lat,
+        lon=lon,
     )
     lead_id, _ = db.upsert_candidate(candidate, score=0)
 
@@ -451,6 +473,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_update.set_defaults(func=cmd_update)
 
     p_add = sub.add_parser("add", help="Add a lead by hand (not from an automated source)")
+    p_add.add_argument(
+        "--google-maps-link",
+        help="A Google Maps link for the place - pre-fills --company/coordinates from it "
+        "when possible (an explicit --company still wins). See docs/SOURCES.md.",
+    )
     p_add.add_argument("--company")
     p_add.add_argument("--contact-name")
     p_add.add_argument("--title")

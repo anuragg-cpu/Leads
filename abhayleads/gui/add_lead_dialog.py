@@ -4,8 +4,9 @@ automated sources would ever surface on their own.
 """
 
 import uuid
+from typing import Optional
 
-from PyQt6.QtCore import QDate
+from PyQt6.QtCore import QDate, Qt
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -13,14 +14,17 @@ from PyQt6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPlainTextEdit,
+    QPushButton,
     QVBoxLayout,
 )
 
 from ..db import Database
+from ..google_maps_link import parse_google_maps_link
 from ..models import STAGES, LeadCandidate
 from ..remote_db import RemoteDatabase
 
@@ -31,9 +35,21 @@ class AddLeadDialog(QDialog):
         self.db = db
 
         self.setWindowTitle("Add Lead")
-        self.resize(480, 520)
+        self.resize(480, 560)
+        self._lat: Optional[float] = None
+        self._lon: Optional[float] = None
 
         layout = QVBoxLayout(self)
+
+        gmaps_row = QHBoxLayout()
+        self.gmaps_link_edit = QLineEdit()
+        self.gmaps_link_edit.setPlaceholderText("Paste a Google Maps link for the place (optional)...")
+        gmaps_row.addWidget(self.gmaps_link_edit, stretch=1)
+        gmaps_fetch_button = QPushButton("Fetch")
+        gmaps_fetch_button.clicked.connect(self._fetch_from_google_maps_link)
+        gmaps_row.addWidget(gmaps_fetch_button)
+        layout.addLayout(gmaps_row)
+
         form = QFormLayout()
 
         self.company_edit = QLineEdit()
@@ -79,6 +95,34 @@ class AddLeadDialog(QDialog):
 
         self.company_edit.setFocus()
 
+    def _fetch_from_google_maps_link(self):
+        link = self.gmaps_link_edit.text().strip()
+        if not link:
+            return
+
+        self.setCursor(Qt.CursorShape.WaitCursor)
+        try:
+            parsed = parse_google_maps_link(link)
+        finally:
+            self.unsetCursor()
+
+        if not parsed.company and parsed.lat is None:
+            QMessageBox.information(
+                self,
+                "Couldn't read that link",
+                "No place name or coordinates found in that link. This works best with a full "
+                "Google Maps place link (open the place, then Share -> Copy link) - a plain "
+                "search-results or already-shortened business listing link may not have "
+                "enough encoded in the URL itself. You can still fill in the fields by hand.",
+            )
+            return
+
+        if parsed.company and not self.company_edit.text().strip():
+            self.company_edit.setText(parsed.company)
+        if not self.url_edit.text().strip():
+            self.url_edit.setText(parsed.url)
+        self._lat, self._lon = parsed.lat, parsed.lon
+
     def _save(self):
         company = self.company_edit.text().strip()
         contact = self.contact_edit.text().strip()
@@ -99,6 +143,8 @@ class AddLeadDialog(QDialog):
             phone=self.phone_edit.text().strip(),
             url=self.url_edit.text().strip(),
             raw_text="Added by hand.",
+            lat=self._lat,
+            lon=self._lon,
         )
         lead_id, _ = self.db.upsert_candidate(candidate, score=0)
 
