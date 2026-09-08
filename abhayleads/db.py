@@ -329,6 +329,8 @@ class Database:
         email: Optional[str] = None,
         phone: Optional[str] = None,
         url: Optional[str] = None,
+        lat: Optional[float] = None,
+        lon: Optional[float] = None,
     ):
         lead = self.get_lead(lead_id)
         if lead is None:
@@ -373,6 +375,17 @@ class Database:
             if value is not None:
                 fields.append(f"{column} = ?")
                 params.append(value)
+
+        # Backfilling a location onto a lead that didn't come with one
+        # (e.g. one added by hand or imported from a CSV without
+        # coordinates) - via a pasted Google Maps link, most commonly.
+        # Only ever both-or-neither: a point isn't meaningful with just
+        # one half of it.
+        if lat is not None and lon is not None:
+            fields.append("lat = ?")
+            params.append(lat)
+            fields.append("lon = ?")
+            params.append(lon)
 
         if not fields:
             return

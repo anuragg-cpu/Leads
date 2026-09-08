@@ -1,6 +1,8 @@
 """Detail/edit dialog for a single lead."""
 
-from PyQt6.QtCore import QDate, QUrl
+from typing import Optional
+
+from PyQt6.QtCore import QDate, Qt, QUrl
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
     QCheckBox,
@@ -12,12 +14,14 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPlainTextEdit,
     QPushButton,
     QVBoxLayout,
 )
 
 from ..db import Database
+from ..google_maps_link import parse_google_maps_link
 from ..models import STAGES
 from ..remote_db import RemoteDatabase
 
@@ -38,9 +42,25 @@ class LeadDetailDialog(QDialog):
         lead = db.get_lead(lead_id)
 
         self.setWindowTitle(f"Lead #{lead_id} - {lead['company'] or lead['contact_name'] or lead['source']}")
-        self.resize(560, 620)
+        self.resize(560, 660)
+        self._lat: Optional[float] = lead["lat"]
+        self._lon: Optional[float] = lead["lon"]
 
         layout = QVBoxLayout(self)
+
+        gmaps_row = QHBoxLayout()
+        self.gmaps_link_edit = QLineEdit()
+        self.gmaps_link_edit.setPlaceholderText("Paste a Google Maps link to add/update this lead's location...")
+        gmaps_row.addWidget(self.gmaps_link_edit, stretch=1)
+        gmaps_fetch_button = QPushButton("Fetch")
+        gmaps_fetch_button.clicked.connect(self._fetch_from_google_maps_link)
+        gmaps_row.addWidget(gmaps_fetch_button)
+        layout.addLayout(gmaps_row)
+
+        self.location_label = QLabel()
+        self._update_location_label()
+        layout.addWidget(self.location_label)
+
         form = QFormLayout()
 
         self.company_edit = QLineEdit(lead["company"])
@@ -111,6 +131,45 @@ class LeadDetailDialog(QDialog):
         if url:
             QDesktopServices.openUrl(QUrl(url))
 
+    def _update_location_label(self):
+        if self._lat is not None and self._lon is not None:
+            self.location_label.setText(f"Location: {self._lat:.5f}, {self._lon:.5f}")
+        else:
+            self.location_label.setText("Location: not set")
+
+    def _fetch_from_google_maps_link(self):
+        link = self.gmaps_link_edit.text().strip()
+        if not link:
+            return
+
+        self.setCursor(Qt.CursorShape.WaitCursor)
+        try:
+            parsed = parse_google_maps_link(link)
+        finally:
+            self.unsetCursor()
+
+        if not parsed.company and parsed.lat is None:
+            QMessageBox.information(
+                self,
+                "Couldn't read that link",
+                "No place name or coordinates found in that link. This works best with a full "
+                "Google Maps place link (open the place, then Share -> Copy link) - a plain "
+                "search-results or already-shortened business listing link may not have "
+                "enough encoded in the URL itself.",
+            )
+            return
+
+        # Never overwrite fields this lead already has - the link is here
+        # to backfill what's missing (usually just the location), not to
+        # silently replace a company name you or a source already set.
+        if parsed.company and not self.company_edit.text().strip():
+            self.company_edit.setText(parsed.company)
+        if parsed.url and not self.url_edit.text().strip():
+            self.url_edit.setText(parsed.url)
+        if parsed.lat is not None and parsed.lon is not None:
+            self._lat, self._lon = parsed.lat, parsed.lon
+            self._update_location_label()
+
     def _save(self):
         follow_up = None
         clear_follow_up = False
@@ -131,5 +190,7 @@ class LeadDetailDialog(QDialog):
             email=self.email_edit.text(),
             phone=self.phone_edit.text(),
             url=self.url_edit.text(),
+            lat=self._lat,
+            lon=self._lon,
         )
         self.accept()

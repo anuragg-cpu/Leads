@@ -135,6 +135,8 @@ class RemoteDatabase:
         email: Optional[str] = None,
         phone: Optional[str] = None,
         url: Optional[str] = None,
+        lat: Optional[float] = None,
+        lon: Optional[float] = None,
     ):
         payload = {
             "stage": stage,
@@ -147,6 +149,8 @@ class RemoteDatabase:
             "email": email,
             "phone": phone,
             "url": url,
+            "lat": lat,
+            "lon": lon,
         }
         self._request("PATCH", f"/api/leads/{lead_id}", json=payload)
 

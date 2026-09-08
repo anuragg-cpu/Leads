@@ -84,8 +84,12 @@ pipeline as everything else.
 Found a place by manually searching Google Maps? Paste its Google Maps
 link into the box at the top of **Add Lead** and click **Fetch** - it
 pre-fills the company name and coordinates from the link (`abhayleads add
---google-maps-link "..."` does the same from the CLI). See docs/SOURCES.md
-for what kind of link works best.
+--google-maps-link "..."` does the same from the CLI). The same box is
+also at the top of a lead's edit screen, so you can add or update a
+location on a lead you already have (e.g. one missing coordinates after a
+CSV import) without touching its other fields - `abhayleads update 42
+--google-maps-link "..."` does that from the CLI. See docs/SOURCES.md for
+what kind of link works best.
 
 Have a whole list already - a hand-curated dealer list, an export from
 another CRM/spreadsheet? **File -> Import CSV...** (or `abhayleads
